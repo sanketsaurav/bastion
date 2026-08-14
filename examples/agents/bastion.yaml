@@ -1,0 +1,109 @@
+apiVersion: bastion/v1alpha1
+kind: Box
+
+metadata:
+  name: agents
+  labels:
+    purpose: personal-development
+
+provider:
+  name: gcp
+  mode: attached
+  project: example-project
+  zone: us-west1-a
+  instance: agents-devbox
+
+connection:
+  type: iap
+  osLogin: true
+  forwardSshAgent: false
+
+runtime:
+  engine: docker
+  logRotation:
+    maxSize: 10MiB
+    maxFiles: 3
+
+workspace:
+  mount: /workspace
+  dataRoot: /mnt/bastion
+
+host:
+  packages:
+    - git
+    - jq
+    - tmux
+
+  features:
+    - uses: docker
+    - uses: github-cli
+    - uses: mise
+    - uses: claude-code
+
+  files:
+    - source: files/tmux.conf
+      target: ~/.tmux.conf
+      mode: replace
+      permissions: "0600"
+
+volumes:
+  db-data:
+    persistence: durable
+  dashboard-data:
+    persistence: durable
+
+secrets:
+  db-password:
+    source:
+      environment: DB_PASSWORD
+  dashboard-api-token:
+    source:
+      environment: DASHBOARD_API_TOKEN
+
+services:
+  database:
+    image: docker.io/library/postgres:16.4
+    restartPolicy: unless-stopped
+    environment:
+      POSTGRES_PASSWORD:
+        secretRef: db-password
+    mounts:
+      - volume: db-data
+        target: /var/lib/postgresql/data
+    healthcheck:
+      command: ["pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    endpoints:
+      pg:
+        containerPort: 5432
+        protocol: tcp
+        visibility: internal
+
+  dashboard:
+    image: ghcr.io/example/dashboard:1.4.2
+    pullPolicy: if-not-present
+    restartPolicy: unless-stopped
+    dependsOn:
+      - database
+    environment:
+      LOG_LEVEL: info
+      API_TOKEN:
+        secretRef: dashboard-api-token
+    mounts:
+      - volume: dashboard-data
+        target: /app/data
+    resources:
+      cpus: 1
+      memory: 1GiB
+    healthcheck:
+      command: ["/app/dashboard", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    endpoints:
+      web:
+        containerPort: 3000
+        protocol: http
+        visibility: private
