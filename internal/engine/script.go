@@ -72,7 +72,13 @@ dk() { sudo -n docker "$@"; }
 }
 
 // remoteLock emits the remote apply lock: mkdir-based, stale after an hour,
-// recoverable without touching any state directory (SPEC.md §10).
+// recoverable without touching any state directory (SPEC.md §10). A refusal
+// reports the holder's age so the client can distinguish live from
+// abandoned. The lock is released on signal death too (a dropped SSH
+// connection HUPs the runner), not only on clean exit — an in-flight step
+// child may outlive the runner briefly, which apt's dpkg lock timeout and
+// idempotent docker operations absorb. Only a hard kill leaves the lock,
+// for takeover or `rmdir`.
 func (w *scriptWriter) remoteLock(boxID string) {
 	w.linef(`LOCKD="$HOME/.cache/bastion/locks"; mkdir -p "$LOCKD"; LOCK="$LOCKD/%s"`, q(boxID))
 	w.raw(`if ! mkdir "$LOCK" 2>/dev/null; then
@@ -82,9 +88,10 @@ func (w *scriptWriter) remoteLock(boxID string) {
     mkdir "$LOCK" 2>/dev/null || { e lock fail; exit 21; }
     e lock takeover
   else
-    e lock fail; exit 21
+    printf '@e lock fail %s\n' "$age"; exit 21
   fi
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+trap 'rmdir "$LOCK" 2>/dev/null; trap - EXIT; exit 129' HUP INT TERM PIPE
 `)
 }

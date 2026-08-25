@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sanketsaurav/bastion/internal/execx"
 )
@@ -43,12 +44,20 @@ func ApplyPlan(ctx context.Context, s Session, in *Input, plan *Plan, opts Apply
 	parser := newEventParser(plan, hooks)
 	res, runErr := s.RunScript(ctx, script, parser.line)
 	result := &parser.result
+	if ctx.Err() != nil {
+		return result, fmt.Errorf("apply interrupted; completed actions are recorded on the box, the in-flight action may be partially applied, and the remote runner can keep running until the dropped connection is noticed — resume with `bastion plan %s`, then `bastion apply %s`", in.BoxID, in.BoxID)
+	}
 	if runErr != nil {
 		return result, runErr
 	}
 	switch {
 	case result.LockHeld:
-		return result, fmt.Errorf("another apply holds the remote lock for this box; wait for it to finish and retry")
+		held := "another apply holds the remote lock for this box"
+		if result.LockAgeSecs > 0 {
+			held = fmt.Sprintf("another apply has held the remote lock for this box for %s",
+				(time.Duration(result.LockAgeSecs) * time.Second).Round(time.Second))
+		}
+		return result, fmt.Errorf("%s; if it is still running, wait and retry — if it was interrupted, remove the lock with `bastion exec %s -- rmdir .cache/bastion/locks/%s` (stale locks are taken over after an hour)", held, in.BoxID, in.BoxID)
 	case result.Failed != "":
 		msg := fmt.Sprintf("action %q failed", result.Failed)
 		if len(result.FailedLogs) > 0 {

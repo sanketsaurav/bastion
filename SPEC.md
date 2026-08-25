@@ -628,15 +628,29 @@ Two defects found by the drill, fixed same day:
    which GCE Ubuntu 24.04 images do not ship; the failure was masked by
    gap 8. The feature is now root and installs `unzip` first.
 
-Observed, by design but not yet narrated by the CLI (follow-up UX work):
-interrupting the local CLI does not necessarily interrupt the remote runner.
-If the SSH connection survives (observed: orphaned ssh child), the runner
-finishes the whole plan unmonitored and releases the lock; if it drops, the
-runner dies mid-step and leaves the lock for `rmdir` or the one-hour
-takeover. Both ends are safe — markers are written last and the lock
-serializes appliers — but the interrupt error says "transport failed" and
-the lock refusal says "wait for it to finish", neither of which mentions
-resume or recovery.
+Follow-ups from the drill, all landed and live-verified 2026-08-25:
+
+10. ~~orphaned transport~~ — cancellation now signals the transport's whole
+    process group (previously only gcloud, whose ssh child kept the
+    connection — and the remote run — alive and unmonitored), and the
+    runner releases the apply lock from HUP/INT/TERM/PIPE traps, not only
+    on clean exit. Interactive commands keep the old single-process signal:
+    they need the terminal's foreground group.
+11. ~~unnarrated interrupt~~ — an interrupted apply now says what is
+    recorded, what may be partial, that the runner can outlive the
+    connection, and prints the resume commands.
+12. ~~wait-only lock refusal~~ — a lock refusal reports the holder's age
+    and the exact `bastion exec … rmdir` recovery alongside the one-hour
+    takeover.
+
+A constraint worth recording: over IAP, killing the local client does not
+promptly reach the guest — the relay holds the backend leg open, so sshd
+sees the disconnect late and the runner keeps executing meanwhile (observed
+live: a package install finished ~90 s after the local kill, then released
+the lock on clean exit). Interruption is therefore advisory, not
+transactional. The standing guarantees are marker-last writes, a
+serializing lock that self-releases on every death the guest can observe,
+and refusals that carry their own recovery.
 
 **Deferred** (design intact in `docs/original-spec.md`): managed GCP
 infrastructure; public HTTPS ingress (Caddy), static IPs, Cloud DNS; snapshot

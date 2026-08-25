@@ -23,10 +23,11 @@ if ! mkdir "$LOCK" 2>/dev/null; then
     mkdir "$LOCK" 2>/dev/null || { e lock fail; exit 21; }
     e lock takeover
   else
-    e lock fail; exit 21
+    printf '@e lock fail %s\n' "$age"; exit 21
   fi
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+trap 'rmdir "$LOCK" 2>/dev/null; trap - EXIT; exit 129' HUP INT TERM PIPE
 s0() {
   sudo -n mkdir -p /var/lib/bastion/state/testbox/files /var/lib/bastion/state/testbox/features /var/lib/bastion/state/testbox/lfeatures /var/lib/bastion/state/testbox/services /var/lib/bastion/services/testbox /var/lib/bastion/secrets/testbox
   sudo -n chmod 700 /var/lib/bastion/secrets/testbox

@@ -130,13 +130,42 @@ func TestApplyPlanFailureIsResumable(t *testing.T) {
 func TestApplyPlanRemoteLockHeld(t *testing.T) {
 	in := fixtureInput(t)
 	plan := freshPlan(t, in)
-	sess := &fakeSession{lines: []string{"@e lock fail"}, exit: 21}
+	sess := &fakeSession{lines: []string{"@e lock fail 245"}, exit: 21}
 	result, err := ApplyPlan(context.Background(), sess, in, plan, ApplyOptions{SecretValues: map[string]string{"token": "v"}}, ApplyHooks{})
 	if err == nil || !strings.Contains(err.Error(), "remote lock") {
 		t.Fatalf("expected a lock error, got: %v", err)
 	}
-	if !result.LockHeld {
-		t.Error("LockHeld must be set")
+	if !result.LockHeld || result.LockAgeSecs != 245 {
+		t.Errorf("LockHeld/LockAgeSecs = %v/%d", result.LockHeld, result.LockAgeSecs)
+	}
+	msg := err.Error()
+	// An abandoned lock never "finishes": the refusal must carry the age and
+	// the rmdir recovery, not only wait-and-retry advice.
+	if !strings.Contains(msg, "4m5s") || !strings.Contains(msg, "rmdir .cache/bastion/locks/") {
+		t.Errorf("lock error must report age and recovery, got: %s", msg)
+	}
+
+	// Age is optional: an event without it still refuses with recovery text.
+	sess = &fakeSession{lines: []string{"@e lock fail"}, exit: 21}
+	_, err = ApplyPlan(context.Background(), sess, in, plan, ApplyOptions{SecretValues: map[string]string{"token": "v"}}, ApplyHooks{})
+	if err == nil || !strings.Contains(err.Error(), "rmdir") {
+		t.Fatalf("expected a lock error with recovery, got: %v", err)
+	}
+}
+
+func TestApplyPlanInterrupted(t *testing.T) {
+	in := fixtureInput(t)
+	plan := freshPlan(t, in)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sess := &fakeSession{lines: []string{"@e a0 start", "@e a0 ok"}, exit: 255}
+	result, err := ApplyPlan(ctx, sess, in, plan, ApplyOptions{SecretValues: map[string]string{"token": "v"}}, ApplyHooks{})
+	if err == nil || !strings.Contains(err.Error(), "apply interrupted") ||
+		!strings.Contains(err.Error(), "bastion apply "+in.BoxID) {
+		t.Fatalf("expected an interrupted error with resume commands, got: %v", err)
+	}
+	if len(result.Completed) != 1 {
+		t.Errorf("completed actions before the interrupt must be reported, got %v", result.Completed)
 	}
 }
 

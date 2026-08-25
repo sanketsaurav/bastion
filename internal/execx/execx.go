@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 )
 
@@ -33,10 +34,30 @@ type Runner interface {
 // Local runs commands on this machine.
 type Local struct{}
 
+// command builds a captured-output command in its own process group so that
+// cancellation reaches grandchildren too: the transport wraps ssh (gcloud →
+// ssh), and interrupting only the wrapper orphans the live connection — the
+// remote runner then finishes the whole plan unmonitored (observed live,
+// SPEC.md §14). Interrupt rather than SIGKILL so ssh and gcloud tear down
+// cleanly; escalation happens after WaitDelay.
 func command(ctx context.Context, argv []string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	// On context cancellation, interrupt instead of SIGKILL so ssh and gcloud
-	// can tear down cleanly; escalate only after WaitDelay.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGINT); err != nil {
+			return cmd.Process.Signal(os.Interrupt)
+		}
+		return nil
+	}
+	cmd.WaitDelay = 5 * time.Second
+	return cmd
+}
+
+// interactiveCommand keeps the child in this process group: an interactive
+// ssh needs the terminal's foreground group for tty access, and the terminal
+// already delivers Ctrl-C to that whole group itself.
+func interactiveCommand(ctx context.Context, argv []string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 5 * time.Second
 	return cmd
@@ -107,7 +128,7 @@ func (Local) Interactive(ctx context.Context, argv []string) (int, error) {
 	if len(argv) == 0 {
 		return 1, errors.New("execx: empty argv")
 	}
-	cmd := command(ctx, argv)
+	cmd := interactiveCommand(ctx, argv)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

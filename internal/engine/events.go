@@ -12,6 +12,7 @@ type ApplyResult struct {
 	FailedLogs   []string            `json:"failedLogs,omitempty"`
 	Done         bool                `json:"done"`
 	LockHeld     bool                `json:"lockHeld,omitempty"`
+	LockAgeSecs  int                 `json:"lockAgeSeconds,omitempty"`
 	LockTakeover bool                `json:"lockTakeover,omitempty"`
 	Logs         map[string][]string `json:"-"`
 }
@@ -61,6 +62,11 @@ func (p *eventParser) line(raw string) {
 			switch status {
 			case "fail":
 				p.result.LockHeld = true
+				if len(parts) >= 3 {
+					if age, err := strconv.Atoi(parts[2]); err == nil && age > 0 {
+						p.result.LockAgeSecs = age
+					}
+				}
 			case "takeover":
 				p.result.LockTakeover = true
 			}
