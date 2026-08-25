@@ -62,9 +62,10 @@ func aptApply(pkgs string) func(map[string]any) (string, error) {
 	}
 }
 
-// userBinCheck probes the conventional user-level install locations.
-func userBinCheck(name string, paths ...string) string {
-	script := ""
+// userBinCheck probes the conventional user-level install locations for
+// binary. The fact is reported under feat — the feature name, which plan
+// looks up — never the binary name; the two differ (claude-code/claude).
+func userBinCheck(feat, binary string, paths ...string) string {
 	cond := ""
 	for _, p := range paths {
 		if cond != "" {
@@ -72,9 +73,8 @@ func userBinCheck(name string, paths ...string) string {
 		}
 		cond += fmt.Sprintf(`[ -x "$HOME"/%s ]`, q(p))
 	}
-	script += fmt.Sprintf(`if %s || command -v %s >/dev/null 2>&1; then f feat %s present; else f feat %s absent; fi
-`, cond, q(name), q(name), q(name))
-	return script
+	return fmt.Sprintf(`if %s || command -v %s >/dev/null 2>&1; then f feat %s present; else f feat %s absent; fi
+`, cond, q(binary), q(feat), q(feat))
 }
 
 // installerApply runs an official HTTPS installer script as the user.
@@ -142,7 +142,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 	},
 	"mise": {
 		Name: "mise", Version: "1", Options: []string{"version"},
-		CheckBash: userBinCheck("mise", ".local/bin/mise"),
+		CheckBash: userBinCheck("mise", "mise", ".local/bin/mise"),
 		ApplyBash: installerApply(func(v string) string {
 			env := ""
 			if v != "" {
@@ -153,7 +153,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 	},
 	"uv": {
 		Name: "uv", Version: "1", Options: []string{"version"},
-		CheckBash: userBinCheck("uv", ".local/bin/uv"),
+		CheckBash: userBinCheck("uv", "uv", ".local/bin/uv"),
 		ApplyBash: installerApply(func(v string) string {
 			url := "https://astral.sh/uv/install.sh"
 			if v != "" {
@@ -164,7 +164,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 	},
 	"bun": {
 		Name: "bun", Version: "1", Options: []string{"version"},
-		CheckBash: userBinCheck("bun", ".bun/bin/bun"),
+		CheckBash: userBinCheck("bun", "bun", ".bun/bin/bun"),
 		ApplyBash: installerApply(func(v string) string {
 			if v != "" {
 				return "curl -fsSL https://bun.sh/install | bash -s " + q("bun-v"+v) + "\n"
@@ -174,7 +174,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 	},
 	"claude-code": {
 		Name: "claude-code", Version: "1", Options: []string{"version"},
-		CheckBash: userBinCheck("claude", ".local/bin/claude"),
+		CheckBash: userBinCheck("claude-code", "claude", ".local/bin/claude"),
 		ApplyBash: installerApply(func(v string) string {
 			if v != "" {
 				return "curl -fsSL https://claude.ai/install.sh | bash -s " + q(v) + "\n"
@@ -184,7 +184,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 	},
 	"codex": {
 		Name: "codex", Version: "1", Options: []string{"version"},
-		CheckBash: userBinCheck("codex", ".local/bin/codex"),
+		CheckBash: userBinCheck("codex", "codex", ".local/bin/codex"),
 		ApplyBash: func(with map[string]any) (string, error) {
 			v, err := versionOpt(with)
 			if err != nil {
