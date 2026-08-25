@@ -52,13 +52,17 @@ func targetExpr(target string) string {
 
 // runFn emits the apply-step wrapper: streams step output as @l lines, emits
 // @e start/ok/fail, and stops the script on the first failure so earlier
-// successes stand and the run is resumable (SPEC.md §10).
+// successes stand and the run is resumable (SPEC.md §10). Steps execute
+// under set -e -o pipefail: without it a step's status is only its last
+// command's, so a failed installer pipe followed by the marker write
+// reported ok and recorded a marker for work that never happened.
 func (w *scriptWriter) runFn() {
 	w.raw(`e() { printf '@e %s %s\n' "$1" "$2"; }
 run() {
   local id="$1"; shift
   e "$id" start
-  ( "$@" 2>&1 | while IFS= read -r ln; do printf '@l %s %s\n' "$id" "$(printf %s "$ln" | b64)"; done
+  ( set -eo pipefail
+    "$@" 2>&1 | while IFS= read -r ln; do printf '@l %s %s\n' "$id" "$(printf %s "$ln" | b64)"; done
     exit "${PIPESTATUS[0]}" )
   local rc=$?
   if [ "$rc" -eq 0 ]; then e "$id" ok; else e "$id" fail; exit 20; fi

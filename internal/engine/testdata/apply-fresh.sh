@@ -8,7 +8,8 @@ e() { printf '@e %s %s\n' "$1" "$2"; }
 run() {
   local id="$1"; shift
   e "$id" start
-  ( "$@" 2>&1 | while IFS= read -r ln; do printf '@l %s %s\n' "$id" "$(printf %s "$ln" | b64)"; done
+  ( set -eo pipefail
+    "$@" 2>&1 | while IFS= read -r ln; do printf '@l %s %s\n' "$id" "$(printf %s "$ln" | b64)"; done
     exit "${PIPESTATUS[0]}" )
   local rc=$?
   if [ "$rc" -eq 0 ]; then e "$id" ok; else e "$id" fail; exit 20; fi

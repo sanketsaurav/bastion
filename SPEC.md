@@ -572,8 +572,8 @@ installers; codex via GitHub releases); local feature contract
 managed files (replace, first-touch backups); marker state (Δ10);
 resume-after-partial-failure.
 *Exit:* clean Ubuntu 24.04 VM converges to the example config; second apply is
-a no-op; an interrupted apply resumes safely. *(First two proven live;
-interrupted-apply resume proven against fakes only.)*
+a no-op; an interrupted apply resumes safely. *(All proven live; resume drill
+2026-08-25.)*
 
 **C — services** *(implemented; validated end-to-end on a real GCE VM 2026-08-12)*: deterministic
 Compose generation with ownership labels and isolation defaults; engine-side
@@ -609,8 +609,34 @@ Gaps from the 2026-08-12 real-VM validation — **all closed the same day**
 7. doctor's SSH probe retries 3× over ~10 s so a just-booted box's OS Login
    key propagation doesn't read as failure (found during fix verification).
 
-Remaining known gap: interrupted-apply resume is proven against fakes but has
-not been exercised live (requires killing a real mid-Docker-install apply).
+Interrupted-apply resume — exercised live 2026-08-25, gap closed. A real
+apply was SIGINT-killed 10 s into a mid-apt feature step, and the
+abandoned-lock state (lock directory held, step unmarked, payload partial)
+was driven through recovery. Verified live: completed steps keep their
+markers and drop out of the next plan; an interruption between a step's
+mutation and its marker write replans as "present but not yet managed";
+read-only plans run under a held lock; a concurrent apply is refused;
+`rmdir` alone recovers the lock; the resumed apply converges to a no-op.
+Two defects found by the drill, fixed same day:
+
+8. ~~false-success steps~~ — a step's status was its last command's, so a
+   failed installer pipe followed by the unconditional marker write reported
+   ok and recorded a marker for work that never happened. Steps now execute
+   under `set -e -o pipefail`, regression-tested by running the harness
+   under real bash.
+9. ~~bun unusable on stock guests~~ — bun's installer requires `unzip`,
+   which GCE Ubuntu 24.04 images do not ship; the failure was masked by
+   gap 8. The feature is now root and installs `unzip` first.
+
+Observed, by design but not yet narrated by the CLI (follow-up UX work):
+interrupting the local CLI does not necessarily interrupt the remote runner.
+If the SSH connection survives (observed: orphaned ssh child), the runner
+finishes the whole plan unmonitored and releases the lock; if it drops, the
+runner dies mid-step and leaves the lock for `rmdir` or the one-hour
+takeover. Both ends are safe — markers are written last and the lock
+serializes appliers — but the interrupt error says "transport failed" and
+the lock refusal says "wait for it to finish", neither of which mentions
+resume or recovery.
 
 **Deferred** (design intact in `docs/original-spec.md`): managed GCP
 infrastructure; public HTTPS ingress (Caddy), static IPs, Cloud DNS; snapshot

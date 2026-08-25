@@ -4,11 +4,13 @@ A local, config-driven CLI for operating a personal Linux development box on
 Google Compute Engine. Your terminal is the control plane: no hosted service,
 no team layer, no daemon on the VM.
 
-> **Status: pre-alpha, milestones A–C implemented.** Attached-VM lifecycle
-> (adopt, status, up/down, ssh, exec, port, doctor), host convergence
-> (plan/apply: packages, features, managed files), and container services
-> (Compose generation, volumes, secrets, private endpoints) are built and
-> covered by fake-transport tests — **not yet validated against a real VM**.
+> **Status: pre-alpha, milestones A–C implemented and validated end-to-end
+> against real GCE VMs.** Attached-VM lifecycle (adopt, status, up/down, ssh,
+> exec, port, doctor), host convergence (plan/apply: packages, features,
+> managed files), and container services (Compose generation, volumes,
+> secrets, private endpoints) are covered by fake-transport tests and have
+> been exercised live: fresh-VM convergence, idempotent re-plans, drift
+> repair, private-endpoint tunnels, and interrupted-apply recovery.
 > The name `bastion` is a working title. See [SPEC.md](SPEC.md) for the full
 > specification and [docs/original-spec.md](docs/original-spec.md) for the
 > long-form design rationale.

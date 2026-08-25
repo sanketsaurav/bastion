@@ -163,13 +163,17 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 		}),
 	},
 	"bun": {
-		Name: "bun", Version: "1", Options: []string{"version"},
+		// Root because the installer requires unzip, which Ubuntu cloud
+		// images do not ship.
+		Name: "bun", Version: "2", RequiresRoot: true, Options: []string{"version"},
 		CheckBash: userBinCheck("bun", "bun", ".bun/bin/bun"),
 		ApplyBash: installerApply(func(v string) string {
+			pre := "if ! command -v unzip >/dev/null 2>&1; then\n" +
+				aptGet + " update -qq\n" + aptGet + " install -y unzip\nfi\n"
 			if v != "" {
-				return "curl -fsSL https://bun.sh/install | bash -s " + q("bun-v"+v) + "\n"
+				return pre + "curl -fsSL https://bun.sh/install | bash -s " + q("bun-v"+v) + "\n"
 			}
-			return "curl -fsSL https://bun.sh/install | bash\n"
+			return pre + "curl -fsSL https://bun.sh/install | bash\n"
 		}),
 	},
 	"claude-code": {
