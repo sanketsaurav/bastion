@@ -31,6 +31,9 @@ func localFeatureName(uses string) string {
 	return path.Base(path.Clean(strings.TrimPrefix(uses, "./")))
 }
 
+// LocalFeatureNameOf is localFeatureName for callers outside the engine.
+func LocalFeatureNameOf(uses string) string { return localFeatureName(uses) }
+
 // localFeatureRemoteDir returns a shell expression (already quoted) for the
 // feature's remote source directory — $HOME must expand, the rest must not.
 func localFeatureRemoteDir(boxID, name string) string {

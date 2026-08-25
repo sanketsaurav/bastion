@@ -300,6 +300,9 @@ bastion doctor [box]                   Environment and connectivity diagnosis
 Milestone B — convergence: `plan`, `apply`, and `up` gains its apply step.
 Milestone C — services: `service list|status|logs|start|stop|restart|exec|update`,
 `endpoint list`, `volume delete`, and `port` learns `<service>:<endpoint>` targets.
+Post-C: `feature remove [box] <feature>` — explicit removal of a user-level
+built-in's installed payload (§8.3; declared and apt-based features are
+refused; configuration and credentials are kept).
 
 Notes:
 
@@ -387,6 +390,18 @@ from root-level steps; records its applied version and options digest in remote
 state. Installer downloads use HTTPS and verify checksums/signatures when
 upstream publishes them. The Docker feature owns daemon config, bounded JSON
 log rotation, and reports that docker-group membership is effectively root.
+
+Undeclaring a feature never uninstalls it (packages likewise, §8.2). Instead
+every plan reports leftover feature markers as orphan notes — installed by
+Bastion, no longer declared. Cleanup is explicit: `bastion feature remove
+<box> <feature>` deletes exactly what the installer wrote for user-level
+built-ins (binaries, versioned installs, caches, and the state marker) and
+always keeps user configuration and credentials (`~/.claude`, `~/.codex`,
+`~/.config/mise`, …). Apt-based built-ins are refused with the manual apt
+command — their packages may be shared, so removal is not Bastion's call —
+and a still-declared feature is refused outright, since the next apply would
+reinstall it. The guaranteed-clean path remains rebuilding the VM: the box
+is disposable, the data root is not.
 
 ### 8.4 Local features
 
@@ -642,6 +657,10 @@ Follow-ups from the drill, all landed and live-verified 2026-08-25:
 12. ~~wait-only lock refusal~~ — a lock refusal reports the holder's age
     and the exact `bastion exec … rmdir` recovery alongside the one-hour
     takeover.
+13. additive cleanup (2026-08-25, from the same review): plans report
+    undeclared feature markers as orphan notes, and `feature remove` gives
+    user-level built-ins a safe inverse (§8.3). Apply stays strictly
+    additive.
 
 A constraint worth recording: over IAP, killing the local client does not
 promptly reach the guest — the relay holds the backend leg open, so sshd

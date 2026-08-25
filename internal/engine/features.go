@@ -16,6 +16,17 @@ type Builtin struct {
 	Options      []string // allowed keys in `with`
 	CheckBash    string
 	ApplyBash    func(with map[string]any) (string, error)
+
+	// RemovePaths, when non-empty, lists the $HOME-relative paths the
+	// installer wrote — binaries, versioned installs, caches — which
+	// `bastion feature remove` deletes. User configuration and credentials
+	// are never listed. Empty means bastion has no safe inverse.
+	RemovePaths []string
+	// RemoveKeeps names what removal deliberately leaves in place.
+	RemoveKeeps string
+	// RemoveHint says how to remove the feature manually when RemovePaths
+	// is empty (apt-based features share dependencies; removal is yours).
+	RemoveHint string
 }
 
 var versionOptRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
@@ -90,18 +101,33 @@ func installerApply(render func(version string) string) func(map[string]any) (st
 	}
 }
 
+// FeatureRemoveScript builds the remote removal for a user-level builtin:
+// delete the installer's payload paths, then the feature's state marker.
+// Only callable for builtins with RemovePaths — every target is a literal
+// $HOME-relative path from the registry, never free-form input (SPEC.md
+// §11: no broad or unresolved deletion targets).
+func FeatureRemoveScript(in *Input, def *Builtin) string {
+	rm := "rm -rf --"
+	for _, p := range def.RemovePaths {
+		rm += ` "$HOME"/` + q(p)
+	}
+	return rm + " && sudo -n rm -f -- " + q(in.stateDir()+"/features/"+def.Name+".json")
+}
+
 // Builtins is the registry of implemented built-in features.
 var Builtins = map[string]*Builtin{
 	"tmux": {
 		Name: "tmux", Version: "1", RequiresRoot: true,
-		CheckBash: aptCheck("tmux", "tmux"),
-		ApplyBash: aptApply("tmux"),
+		CheckBash:  aptCheck("tmux", "tmux"),
+		ApplyBash:  aptApply("tmux"),
+		RemoveHint: "sudo apt-get remove tmux",
 	},
 	"build-essential": {
 		Name: "build-essential", Version: "1", RequiresRoot: true,
 		CheckBash: `if dpkg-query -W -f='${db:Status-Status}' build-essential 2>/dev/null | grep -q installed; then f feat build-essential present; else f feat build-essential absent; fi
 `,
-		ApplyBash: aptApply("build-essential pkg-config"),
+		ApplyBash:  aptApply("build-essential pkg-config"),
+		RemoveHint: "sudo apt-get remove build-essential pkg-config, then sudo apt-get autoremove — other packages may depend on the toolchain",
 	},
 	"docker": {
 		Name: "docker", Version: "1", RequiresRoot: true,
@@ -124,6 +150,7 @@ sudo -n usermod -aG docker "$USER"
 echo "note: docker group membership is effectively root; it takes effect on your next SSH session"
 `, nil
 		},
+		RemoveHint: "docker underpins declared services; if you must: sudo apt-get remove docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin (stops every container; /var/lib/docker keeps image and volume data)",
 	},
 	"github-cli": {
 		Name: "github-cli", Version: "1", RequiresRoot: true,
@@ -139,6 +166,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 ` + aptGet + ` install -y gh
 `, nil
 		},
+		RemoveHint: "sudo apt-get remove gh",
 	},
 	"mise": {
 		Name: "mise", Version: "1", Options: []string{"version"},
@@ -150,6 +178,8 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 			}
 			return "curl -fsSL https://mise.run | " + env + "sh\n"
 		}),
+		RemovePaths: []string{".local/bin/mise", ".local/share/mise", ".local/state/mise", ".cache/mise"},
+		RemoveKeeps: "~/.config/mise (your configuration)",
 	},
 	"uv": {
 		Name: "uv", Version: "1", Options: []string{"version"},
@@ -161,6 +191,8 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 			}
 			return "curl -fsSL " + q(url) + " | sh\n"
 		}),
+		RemovePaths: []string{".local/bin/uv", ".local/bin/uvx", ".local/share/uv", ".cache/uv"},
+		RemoveKeeps: "~/.config/uv (your configuration)",
 	},
 	"bun": {
 		// Root because the installer requires unzip, which Ubuntu cloud
@@ -175,10 +207,14 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 			}
 			return pre + "curl -fsSL https://bun.sh/install | bash\n"
 		}),
+		RemovePaths: []string{".bun"},
+		RemoveKeeps: "PATH lines the installer added to your shell rc files",
 	},
 	"claude-code": {
 		Name: "claude-code", Version: "1", Options: []string{"version"},
-		CheckBash: userBinCheck("claude-code", "claude", ".local/bin/claude"),
+		CheckBash:   userBinCheck("claude-code", "claude", ".local/bin/claude"),
+		RemovePaths: []string{".local/bin/claude", ".local/share/claude", ".cache/claude"},
+		RemoveKeeps: "~/.claude and ~/.claude.json (settings and credentials)",
 		ApplyBash: installerApply(func(v string) string {
 			if v != "" {
 				return "curl -fsSL https://claude.ai/install.sh | bash -s " + q(v) + "\n"
@@ -188,7 +224,9 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 	},
 	"codex": {
 		Name: "codex", Version: "1", Options: []string{"version"},
-		CheckBash: userBinCheck("codex", "codex", ".local/bin/codex"),
+		CheckBash:   userBinCheck("codex", "codex", ".local/bin/codex"),
+		RemovePaths: []string{".local/bin/codex"},
+		RemoveKeeps: "~/.codex (settings and credentials)",
 		ApplyBash: func(with map[string]any) (string, error) {
 			v, err := versionOpt(with)
 			if err != nil {

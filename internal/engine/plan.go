@@ -64,6 +64,8 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 	}
 
 	var actions []Action
+	declaredFeatures := map[string]bool{}
+	declaredLocalFeatures := map[string]bool{}
 
 	// 1. Packages.
 	if box.Host != nil {
@@ -85,6 +87,7 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 		// 2. Features, in declaration order.
 		for _, feat := range box.Host.Features {
 			if feat.Local() {
+				declaredLocalFeatures[localFeatureName(feat.Uses)] = true
 				act, err := planLocalFeature(in, facts, feat.Uses, feat.With)
 				if err != nil {
 					return nil, err
@@ -98,6 +101,7 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 			if !ok {
 				return nil, fmt.Errorf("built-in feature %q is not implemented in this version", feat.Uses)
 			}
+			declaredFeatures[def.Name] = true
 			if err := validateOptions(def, feat.With); err != nil {
 				return nil, err
 			}
@@ -194,6 +198,34 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 			plan.Notes = append(plan.Notes, fmt.Sprintf(
 				"durable volume directory %q is orphaned (not declared); delete with `bastion volume delete %s %s`",
 				name, in.BoxID, name))
+		}
+	}
+
+	// Feature markers with no declaration: installed by bastion, no longer
+	// managed. Reported only — apply never uninstalls on undeclare.
+	for _, name := range facts.FeatureMarkerNames {
+		if declaredFeatures[name] {
+			continue
+		}
+		def, known := Builtins[name]
+		switch {
+		case known && len(def.RemovePaths) > 0:
+			plan.Notes = append(plan.Notes, fmt.Sprintf(
+				"feature %q was installed by bastion but is no longer declared; remove it with `bastion feature remove %s %s`, or redeclare it",
+				name, in.BoxID, name))
+		case known:
+			plan.Notes = append(plan.Notes, fmt.Sprintf(
+				"feature %q was installed by bastion but is no longer declared; it is apt-managed — remove it yourself (%s), or redeclare it",
+				name, def.RemoveHint))
+		default:
+			plan.Notes = append(plan.Notes, fmt.Sprintf(
+				"feature %q left bastion state on the box but is unknown to this version; its marker remains", name))
+		}
+	}
+	for _, name := range facts.LocalFeatureMarkerNames {
+		if !declaredLocalFeatures[name] {
+			plan.Notes = append(plan.Notes, fmt.Sprintf(
+				"local feature %q was applied by bastion but is no longer declared; its effects are user-defined and stay until you remove them", name))
 		}
 	}
 

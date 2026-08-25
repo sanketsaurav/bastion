@@ -23,6 +23,11 @@ type Facts struct {
 	Secrets           map[string]bool     // service → env file present
 	LocalFeatureCheck map[string]string   // name → ok|needs
 
+	// Every feature marker present on the box, declared or not — the plan
+	// subtracts declared names to report orphans.
+	FeatureMarkerNames      []string
+	LocalFeatureMarkerNames []string
+
 	Docker           DockerFacts
 	Services         map[string]ServiceFact // declared and discovered, by service name
 	Orphans          []string               // bastion-labeled services no longer declared
@@ -242,6 +247,14 @@ func (f *Facts) absorb(p []string) error {
 	case "odvol":
 		if len(p) >= 2 {
 			f.OrphanDurable = append(f.OrphanDurable, p[1])
+		}
+	case "fmark":
+		if len(p) >= 2 {
+			f.FeatureMarkerNames = append(f.FeatureMarkerNames, p[1])
+		}
+	case "lmark":
+		if len(p) >= 2 {
+			f.LocalFeatureMarkerNames = append(f.LocalFeatureMarkerNames, p[1])
 		}
 	case "marker":
 		if len(p) >= 4 {

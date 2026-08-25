@@ -48,5 +48,11 @@ done
 if [ -d /mnt/bastion/volumes/data ]; then f dvol data present; else f dvol data absent; fi
 if dq volume inspect bastion-testbox-scratch >/dev/null; then f evol scratch present; else f evol scratch absent; fi
 if [ -d /mnt/bastion/volumes ]; then for d in /mnt/bastion/volumes/*/; do [ -d "$d" ] && f odvol "$(basename "$d")"; done; fi
+for mf in /var/lib/bastion/state/testbox/features/*.json /var/lib/bastion/state/testbox/lfeatures/*.json; do
+  [ -e "$mf" ] || continue
+  n=$(basename "$mf" .json)
+  case "$n" in (*[!a-z0-9-]*|"") continue;; esac
+  case "$mf" in (*/lfeatures/*) f lmark "$n";; (*) f fmark "$n";; esac
+done
 f end ok
 exit 0

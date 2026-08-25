@@ -114,6 +114,7 @@ func (a *App) Root() *cobra.Command {
 		a.portCmd(),
 		a.serviceCmd(),
 		a.endpointCmd(),
+		a.featureCmd(),
 		a.volumeCmd(),
 		a.doctorCmd(),
 		a.versionCmd(),

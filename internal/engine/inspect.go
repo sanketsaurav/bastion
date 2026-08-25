@@ -113,6 +113,15 @@ done`, q(in.BoxID))
 	// Orphaned durable volume directories (reported, never touched).
 	w.linef(`if [ -d %s ]; then for d in %s/*/; do [ -d "$d" ] && f odvol "$(basename "$d")"; done; fi`,
 		q(box.Workspace.DataRoot+"/volumes"), q(box.Workspace.DataRoot+"/volumes"))
+	// Every feature marker on the box, declared or not — the plan reports
+	// the undeclared ones as orphans (installed by bastion, no longer
+	// managed). Same label-guard pattern as the service sweep.
+	w.linef(`for mf in %s/features/*.json %s/lfeatures/*.json; do
+  [ -e "$mf" ] || continue
+  n=$(basename "$mf" .json)
+  case "$n" in (*[!a-z0-9-]*|"") continue;; esac
+  case "$mf" in (*/lfeatures/*) f lmark "$n";; (*) f fmark "$n";; esac
+done`, q(state), q(state))
 
 	w.raw("f end ok\n")
 	w.raw("exit 0\n")

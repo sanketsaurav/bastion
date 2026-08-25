@@ -29,6 +29,7 @@ $ bastion ssh agents          # interactive session over IAP
 $ bastion exec agents -- tmux list-sessions
 $ bastion service logs agents dashboard -f
 $ bastion port agents dashboard:web   # private endpoint → local loopback
+$ bastion feature remove agents bun   # uninstall a user-level feature; config/credentials kept
 $ bastion down agents         # stop compute; disks and data are retained
 ```
 
