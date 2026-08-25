@@ -27,6 +27,8 @@ type Facts struct {
 	// subtracts declared names to report orphans.
 	FeatureMarkerNames      []string
 	LocalFeatureMarkerNames []string
+	// Apt prerequisites bastion recorded installing, by owning feature.
+	PrereqMarkers map[string][]string
 
 	Docker           DockerFacts
 	Services         map[string]ServiceFact // declared and discovered, by service name
@@ -94,6 +96,13 @@ type ServiceMarker struct {
 	Image        string `json:"image"`
 }
 
+// PrereqMarker records one apt package a feature's apply installed because
+// it was missing — evidence of ownership, consumed by feature removal.
+type PrereqMarker struct {
+	Package string `json:"package"`
+	Feature string `json:"feature"`
+}
+
 func newFacts() *Facts {
 	return &Facts{
 		Packages:          map[string]bool{},
@@ -105,6 +114,7 @@ func newFacts() *Facts {
 		Services:          map[string]ServiceFact{},
 		EphemeralVolumes:  map[string]bool{},
 		DurableVolumes:    map[string]bool{},
+		PrereqMarkers:     map[string][]string{},
 		Markers: Markers{
 			Files:         map[string]FileMarker{},
 			Features:      map[string]FeatureMarker{},
@@ -255,6 +265,10 @@ func (f *Facts) absorb(p []string) error {
 	case "lmark":
 		if len(p) >= 2 {
 			f.LocalFeatureMarkerNames = append(f.LocalFeatureMarkerNames, p[1])
+		}
+	case "pmark":
+		if len(p) >= 3 {
+			f.PrereqMarkers[p[1]] = append(f.PrereqMarkers[p[1]], p[2])
 		}
 	case "marker":
 		if len(p) >= 4 {

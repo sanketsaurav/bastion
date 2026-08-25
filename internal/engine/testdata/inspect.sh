@@ -54,5 +54,12 @@ for mf in /var/lib/bastion/state/testbox/features/*.json /var/lib/bastion/state/
   case "$n" in (*[!a-z0-9-]*|"") continue;; esac
   case "$mf" in (*/lfeatures/*) f lmark "$n";; (*) f fmark "$n";; esac
 done
+for pf in /var/lib/bastion/state/testbox/prereqs/*/*.json; do
+  [ -e "$pf" ] || continue
+  pd=$(basename "$(dirname "$pf")"); pn=$(basename "$pf" .json)
+  case "$pd" in (*[!a-z0-9-]*|"") continue;; esac
+  case "$pn" in (*[!a-z0-9.+-]*|"") continue;; esac
+  f pmark "$pd" "$pn"
+done
 f end ok
 exit 0

@@ -122,6 +122,15 @@ done`, q(in.BoxID))
   case "$n" in (*[!a-z0-9-]*|"") continue;; esac
   case "$mf" in (*/lfeatures/*) f lmark "$n";; (*) f fmark "$n";; esac
 done`, q(state), q(state))
+	// Apt prerequisites bastion recorded installing for a feature. Package
+	// names allow apt's wider charset (g++, libfoo1.2) — still protocol-safe.
+	w.linef(`for pf in %s/prereqs/*/*.json; do
+  [ -e "$pf" ] || continue
+  pd=$(basename "$(dirname "$pf")"); pn=$(basename "$pf" .json)
+  case "$pd" in (*[!a-z0-9-]*|"") continue;; esac
+  case "$pn" in (*[!a-z0-9.+-]*|"") continue;; esac
+  f pmark "$pd" "$pn"
+done`, q(state))
 
 	w.raw("f end ok\n")
 	w.raw("exit 0\n")

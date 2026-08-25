@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // Builtin is a host feature Bastion knows how to check and apply. CheckBash
@@ -17,6 +18,11 @@ type Builtin struct {
 	CheckBash    string
 	ApplyBash    func(with map[string]any) (string, error)
 
+	// AptPrereqs are apt packages the installer needs. Apply installs a
+	// missing one and records a per-package marker under this feature —
+	// one already on the box is never claimed — so removal can uninstall
+	// exactly what this feature added. Requires RequiresRoot.
+	AptPrereqs []string
 	// RemovePaths, when non-empty, lists the $HOME-relative paths the
 	// installer wrote — binaries, versioned installs, caches — which
 	// `bastion feature remove` deletes. User configuration and credentials
@@ -102,16 +108,38 @@ func installerApply(render func(version string) string) func(map[string]any) (st
 }
 
 // FeatureRemoveScript builds the remote removal for a user-level builtin:
-// delete the installer's payload paths, then the feature's state marker.
-// Only callable for builtins with RemovePaths — every target is a literal
-// $HOME-relative path from the registry, never free-form input (SPEC.md
-// §11: no broad or unresolved deletion targets).
+// delete the installer's payload paths, the feature's state marker, and any
+// apt prerequisite this feature's apply recorded installing. A prerequisite
+// found already present was never claimed, and one that other packages now
+// depend on is kept (and reported) rather than cascade-removed. Only
+// callable for builtins with RemovePaths — every target is a literal path
+// from the registry, never free-form input (SPEC.md §11). POSIX sh.
 func FeatureRemoveScript(in *Input, def *Builtin) string {
+	var b strings.Builder
+	b.WriteString("set -e\n")
 	rm := "rm -rf --"
 	for _, p := range def.RemovePaths {
 		rm += ` "$HOME"/` + q(p)
 	}
-	return rm + " && sudo -n rm -f -- " + q(in.stateDir()+"/features/"+def.Name+".json")
+	b.WriteString(rm + "\n")
+	b.WriteString("sudo -n rm -f -- " + q(in.stateDir()+"/features/"+def.Name+".json") + "\n")
+	for _, pkg := range def.AptPrereqs {
+		pm := in.stateDir() + "/prereqs/" + def.Name + "/" + pkg + ".json"
+		fmt.Fprintf(&b, `if [ -e %s ]; then
+  if [ "$(sudo -n apt-get -s remove %s 2>/dev/null | grep -c '^Remv ')" = 1 ]; then
+    sudo -n DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 remove -y -qq %s >/dev/null 2>&1 && echo %s || echo %s
+  else
+    echo %s
+  fi
+  sudo -n rm -f -- %s
+fi
+`, q(pm), q(pkg), q(pkg),
+			q("removed prerequisite package "+pkg),
+			q("could not remove prerequisite package "+pkg+"; remove it manually"),
+			q("kept prerequisite package "+pkg+": other packages depend on it"),
+			q(pm))
+	}
+	return b.String()
 }
 
 // Builtins is the registry of implemented built-in features.
@@ -195,17 +223,16 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 		RemoveKeeps: "~/.config/uv (your configuration)",
 	},
 	"bun": {
-		// Root because the installer requires unzip, which Ubuntu cloud
-		// images do not ship.
+		// Root because the unzip prerequisite (absent on Ubuntu cloud
+		// images) is installed via apt when missing.
 		Name: "bun", Version: "2", RequiresRoot: true, Options: []string{"version"},
-		CheckBash: userBinCheck("bun", "bun", ".bun/bin/bun"),
+		CheckBash:  userBinCheck("bun", "bun", ".bun/bin/bun"),
+		AptPrereqs: []string{"unzip"},
 		ApplyBash: installerApply(func(v string) string {
-			pre := "if ! command -v unzip >/dev/null 2>&1; then\n" +
-				aptGet + " update -qq\n" + aptGet + " install -y unzip\nfi\n"
 			if v != "" {
-				return pre + "curl -fsSL https://bun.sh/install | bash -s " + q("bun-v"+v) + "\n"
+				return "curl -fsSL https://bun.sh/install | bash -s " + q("bun-v"+v) + "\n"
 			}
-			return pre + "curl -fsSL https://bun.sh/install | bash\n"
+			return "curl -fsSL https://bun.sh/install | bash\n"
 		}),
 		RemovePaths: []string{".bun"},
 		RemoveKeeps: "PATH lines the installer added to your shell rc files",

@@ -99,13 +99,24 @@ func (a *App) featureRemoveCmd() *cobra.Command {
 				}
 				return fmt.Errorf("removing feature %q failed: %s", name, detail)
 			}
+			// Prerequisite outcomes are decided remotely (removed, kept
+			// because depended on, could not remove) and reported as lines.
+			var remote []string
+			for _, line := range strings.Split(string(out.Stdout), "\n") {
+				if line = strings.TrimSpace(line); line != "" {
+					remote = append(remote, line)
+				}
+			}
 			u := a.ui()
 			if u.json {
-				return u.emit(map[string]any{"feature": name, "removed": true, "deleted": def.RemovePaths, "kept": def.RemoveKeeps})
+				return u.emit(map[string]any{"feature": name, "removed": true, "deleted": def.RemovePaths, "kept": def.RemoveKeeps, "prereqs": remote})
 			}
 			fmt.Fprintf(u.out, "%s removed feature %s\n", u.paint(ansiGreen, "✓"), name)
 			for _, p := range def.RemovePaths {
 				fmt.Fprintf(u.out, "  deleted ~/%s\n", p)
+			}
+			for _, line := range remote {
+				fmt.Fprintf(u.out, "  %s\n", line)
 			}
 			if def.RemoveKeeps != "" {
 				fmt.Fprintf(u.out, "  kept    %s\n", def.RemoveKeeps)

@@ -108,7 +108,25 @@ func featureBody(in *Input, fa *featureAction) (string, error) {
 		return "", err
 	}
 	marker, _ := json.Marshal(FeatureMarker{Name: fa.Name, Version: fa.Version, OptionsDigest: fa.Digest})
-	return body + markerWrite(in, "features", fa.Name, marker), nil
+	return aptPrereqBash(in, fa.Def) + body + markerWrite(in, "features", fa.Name, marker), nil
+}
+
+// aptPrereqBash installs a feature's missing apt prerequisites, recording a
+// marker for each one it installs — and only those: a prerequisite already
+// on the box is never claimed, so removing the feature never touches it.
+func aptPrereqBash(in *Input, def *Builtin) string {
+	var b strings.Builder
+	for _, pkg := range def.AptPrereqs {
+		dir := in.stateDir() + "/prereqs/" + def.Name
+		marker, _ := json.Marshal(PrereqMarker{Package: pkg, Feature: def.Name})
+		fmt.Fprintf(&b, `if [ "$(dpkg-query -W -f='${db:Status-Status}' %s 2>/dev/null)" = installed ]; then :; else
+%s update -qq
+%s install -y %s
+sudo -n mkdir -p %s
+%sfi
+`, q(pkg), aptGet, aptGet, q(pkg), q(dir), markerWrite(in, "prereqs/"+def.Name, pkg, marker))
+	}
+	return b.String()
 }
 
 func localFeatureBody(in *Input, lf *localFeatureAction) (string, error) {

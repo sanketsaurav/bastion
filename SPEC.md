@@ -403,6 +403,13 @@ and a still-declared feature is refused outright, since the next apply would
 reinstall it. The guaranteed-clean path remains rebuilding the VM: the box
 is disposable, the data root is not.
 
+Built-ins declare the apt prerequisites their installers need (`bun` →
+`unzip`). Apply installs a missing prerequisite and records a per-package
+marker under the owning feature — one already on the box is never claimed.
+`feature remove` uninstalls exactly the recorded ones, keeping any that
+other packages now depend on (reported, never cascade-removed), and plans
+report prerequisites whose owning feature is gone.
+
 ### 8.4 Local features
 
 ```text

@@ -228,6 +228,23 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 				"local feature %q was applied by bastion but is no longer declared; its effects are user-defined and stay until you remove them", name))
 		}
 	}
+	// Dangling prerequisites: recorded for a feature whose own marker is
+	// gone (removed outside `feature remove`). A prerequisite whose feature
+	// is declared or still marked is owned — its feature's path covers it.
+	featureMarked := map[string]bool{}
+	for _, name := range facts.FeatureMarkerNames {
+		featureMarked[name] = true
+	}
+	for _, feature := range sortedKeys(facts.PrereqMarkers) {
+		if declaredFeatures[feature] || featureMarked[feature] {
+			continue
+		}
+		for _, pkg := range facts.PrereqMarkers[feature] {
+			plan.Notes = append(plan.Notes, fmt.Sprintf(
+				"package %q was installed by bastion as a prerequisite of feature %q, which is gone; remove it (sudo apt-get remove %s) or redeclare the feature",
+				pkg, feature, pkg))
+		}
+	}
 
 	// Bootstrap state directories first whenever any work is planned.
 	if len(actions) > 0 {
