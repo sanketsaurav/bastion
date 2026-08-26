@@ -10,6 +10,7 @@ if sudo -n true 2>/dev/null; then f sudo ok; else f sudo missing; fi
 dq() { docker "$@" 2>/dev/null || sudo -n docker "$@" 2>/dev/null; }
 if [ "$(dpkg-query -W -f='${db:Status-Status}' git 2>/dev/null)" = installed ]; then f pkg git installed; else f pkg git absent; fi
 if [ "$(dpkg-query -W -f='${db:Status-Status}' jq 2>/dev/null)" = installed ]; then f pkg jq installed; else f pkg jq absent; fi
+if grep -Fq '# bastion:shell-integration' "$HOME/.bashrc" 2>/dev/null; then f shline present; else f shline absent; fi
 t="$HOME"/.tmux.conf
 if [ -e "$t" ]; then
   if [ -r "$t" ]; then sha=$(sha256sum <"$t" | cut -d' ' -f1); else sha=unreadable; fi
@@ -17,6 +18,13 @@ if [ -e "$t" ]; then
 else f file fi8udG11eC5jb25m absent; fi
 if [ -e "$t.bastion-backup" ]; then f bak fi8udG11eC5jb25m present; else f bak fi8udG11eC5jb25m absent; fi
 m=$(cat /var/lib/bastion/state/testbox/files/5e5cd79a0e5bebe6.json 2>/dev/null || true); [ -n "$m" ] && f marker file 5e5cd79a0e5bebe6 "$(eb "$m")"
+t="$HOME"/.config/bastion/shell.sh
+if [ -e "$t" ]; then
+  if [ -r "$t" ]; then sha=$(sha256sum <"$t" | cut -d' ' -f1); else sha=unreadable; fi
+  f file fi8uY29uZmlnL2Jhc3Rpb24vc2hlbGwuc2g= present "$sha" "$(stat -c %a "$t" 2>/dev/null || echo '?')"
+else f file fi8uY29uZmlnL2Jhc3Rpb24vc2hlbGwuc2g= absent; fi
+if [ -e "$t.bastion-backup" ]; then f bak fi8uY29uZmlnL2Jhc3Rpb24vc2hlbGwuc2g= present; else f bak fi8uY29uZmlnL2Jhc3Rpb24vc2hlbGwuc2g= absent; fi
+m=$(cat /var/lib/bastion/state/testbox/files/2b1aae370a5deedf.json 2>/dev/null || true); [ -n "$m" ] && f marker file 2b1aae370a5deedf "$(eb "$m")"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 || sudo -n docker compose version >/dev/null 2>&1; then f feat docker "$(eb "$(docker --version 2>/dev/null | head -1)")"; else f feat docker absent; fi
 m=$(cat /var/lib/bastion/state/testbox/features/docker.json 2>/dev/null || true); [ -n "$m" ] && f marker feature docker "$(eb "$m")"
 if command -v tmux >/dev/null 2>&1; then f feat tmux "$(eb "$(tmux -V 2>/dev/null || tmux --version 2>/dev/null | head -1 || echo present)")"; else f feat tmux absent; fi

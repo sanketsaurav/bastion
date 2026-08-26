@@ -30,6 +30,10 @@ type Facts struct {
 	// Apt prerequisites bastion recorded installing, by owning feature.
 	PrereqMarkers map[string][]string
 
+	// ShellLine reports whether ~/.bashrc carries the bastion
+	// shell-integration source line (observed only when host.shell is set).
+	ShellLine bool
+
 	Docker           DockerFacts
 	Services         map[string]ServiceFact // declared and discovered, by service name
 	Orphans          []string               // bastion-labeled services no longer declared
@@ -270,6 +274,8 @@ func (f *Facts) absorb(p []string) error {
 		if len(p) >= 3 {
 			f.PrereqMarkers[p[1]] = append(f.PrereqMarkers[p[1]], p[2])
 		}
+	case "shline":
+		f.ShellLine = len(p) >= 2 && p[1] == "present"
 	case "marker":
 		if len(p) >= 4 {
 			raw, err := b64dec(p[3])

@@ -336,6 +336,27 @@ secrets:
 	wantIssue(t, issues, "exactly one")
 }
 
+func TestShellValidation(t *testing.T) {
+	// The prompt lands inside a single-quoted PS1 assignment: quotes,
+	// spaces, and backslashes must be impossible, not merely escaped.
+	wantIssue(t, validateDoc(t, minimalDoc+`
+host:
+  shell:
+    prompt: "sanket's"
+`), "host.shell.prompt")
+	wantIssue(t, validateDoc(t, minimalDoc+`
+host:
+  shell: {}
+`), "prompt is required")
+	if issues := validateDoc(t, minimalDoc+`
+host:
+  shell:
+    prompt: sanket
+`); len(issues) != 0 {
+		t.Fatalf("valid prompt rejected: %v", issues)
+	}
+}
+
 func TestManagedFileValidation(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "files"), 0o755); err != nil {

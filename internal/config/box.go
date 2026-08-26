@@ -87,6 +87,17 @@ type Host struct {
 	Packages []string      `yaml:"packages,omitempty" json:"packages,omitempty"`
 	Features []Feature     `yaml:"features,omitempty" json:"features,omitempty"`
 	Files    []ManagedFile `yaml:"files,omitempty" json:"files,omitempty"`
+	Shell    *Shell        `yaml:"shell,omitempty" json:"shell,omitempty"`
+}
+
+// Shell configures bastion's shell integration on the box (SPEC.md §8.5):
+// a managed ~/.config/bastion/shell.sh plus exactly one delimited source
+// line in ~/.bashrc.
+type Shell struct {
+	// Prompt is the name PS1 shows in place of the login username
+	// (e.g. `sanket@valhalla` instead of `ext_..._gmail_com@valhalla`).
+	// Cosmetic only: authentication and `whoami` are unchanged.
+	Prompt string `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 }
 
 type Feature struct {

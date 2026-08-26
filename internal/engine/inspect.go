@@ -26,7 +26,14 @@ if sudo -n true 2>/dev/null; then f sudo ok; else f sudo missing; fi
 			w.linef(`if [ "$(dpkg-query -W -f='${db:Status-Status}' %s 2>/dev/null)" = installed ]; then f pkg %s installed; else f pkg %s absent; fi`,
 				q(pkg), q(pkg), q(pkg))
 		}
-		for _, mf := range box.Host.Files {
+		files := box.Host.Files
+		if box.Host.Shell != nil {
+			// The generated shell.sh flows through the same file facts.
+			files = append(files[:len(files):len(files)], config.ManagedFile{Target: ShellTarget})
+			w.linef(`if grep -Fq %s "$HOME/.bashrc" 2>/dev/null; then f shline present; else f shline absent; fi`,
+				q(shellLineMarker))
+		}
+		for _, mf := range files {
 			t := targetExpr(mf.Target)
 			bt := q(b64([]byte(mf.Target)))
 			w.linef(`t=%s

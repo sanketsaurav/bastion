@@ -15,6 +15,9 @@ var (
 	envKeyRe      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	permissionsRe = regexp.MustCompile(`^0[0-7]{3}$`)
 	debianPkgRe   = regexp.MustCompile(`^[a-z0-9][a-z0-9+.-]+$`)
+	// Prompt aliases end up inside a single-quoted PS1 assignment; the
+	// charset forbids quotes, backslashes, and whitespace by construction.
+	promptRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$`)
 )
 
 // ValidateBox returns every semantic issue in a normalized Box. dir is the box
@@ -135,6 +138,13 @@ func (v *validator) host(h *Host) {
 	}
 	for i, f := range h.Files {
 		v.managedFile(i, &f)
+	}
+	if h.Shell != nil {
+		if h.Shell.Prompt == "" {
+			v.addf("host.shell: prompt is required when shell is set")
+		} else if !promptRe.MatchString(h.Shell.Prompt) {
+			v.addf("host.shell.prompt: %q must be 1-32 characters of letters, digits, or . _ - (no spaces or quotes)", h.Shell.Prompt)
+		}
 	}
 }
 

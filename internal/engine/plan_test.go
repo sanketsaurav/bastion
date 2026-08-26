@@ -63,6 +63,8 @@ func TestPlanFreshBox(t *testing.T) {
 		"feature:tmux",
 		"local-feature:mytool",
 		"file:~/.tmux.conf",
+		"file:~/.config/bastion/shell.sh",
+		"shell-line",
 		"network",
 		"volume:data",
 		"volume:scratch",
@@ -95,6 +97,7 @@ func convergedFactLines(t *testing.T, in *Input) []string {
 		t.Fatal(err)
 	}
 	tmuxSHA := sha256hex([]byte(fixtureTmuxConf))
+	shellSHA := sha256hex(shellContent("dev"))
 	_, sourceDigest, err := PackLocalFeature(in.Dir + "/features/mytool")
 	if err != nil {
 		t.Fatal(err)
@@ -112,10 +115,14 @@ func convergedFactLines(t *testing.T, in *Input) []string {
 		"@f pkg jq installed",
 		"@f file " + b64s("~/.tmux.conf") + " present " + tmuxSHA + " 600",
 		"@f bak " + b64s("~/.tmux.conf") + " absent",
+		"@f file " + b64s(ShellTarget) + " present " + shellSHA + " 644",
+		"@f bak " + b64s(ShellTarget) + " absent",
+		"@f shline present",
 		"@f feat docker " + b64s("Docker version 27.0.0"),
 		"@f feat tmux " + b64s("tmux 3.4"),
 		"@f lcheck mytool ok",
 		"@f marker file x " + marker(FileMarker{Target: "~/.tmux.conf", SHA256: tmuxSHA, Mode: "0600"}),
+		"@f marker file y " + marker(FileMarker{Target: ShellTarget, SHA256: shellSHA, Mode: "0644"}),
 		"@f marker feature docker " + marker(FeatureMarker{Name: "docker", Version: "1", OptionsDigest: optionsDigest(nil)}),
 		"@f marker feature tmux " + marker(FeatureMarker{Name: "tmux", Version: "1", OptionsDigest: optionsDigest(nil)}),
 		"@f marker lfeature mytool " + marker(LocalFeatureMarker{Name: "mytool", Version: "2", SourceDigest: sourceDigest, InputsDigest: inputsDigest}),
@@ -156,7 +163,7 @@ func TestPlanDrift(t *testing.T) {
 	t.Run("file content drift", func(t *testing.T) {
 		lines := convergedFactLines(t, in)
 		for i, l := range lines {
-			if strings.HasPrefix(l, "@f file ") {
+			if strings.HasPrefix(l, "@f file "+b64s("~/.tmux.conf")+" ") {
 				lines[i] = "@f file " + b64s("~/.tmux.conf") + " present deadbeef 600"
 			}
 		}

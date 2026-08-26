@@ -67,6 +67,8 @@ func stepBody(in *Input, act *Action, opts ApplyOptions) (string, error) {
 		return localFeatureBody(in, act.lfeat)
 	case KindFile:
 		return fileBody(in, act.file), nil
+	case KindShellLine:
+		return shellLineBody(), nil
 	case KindNetwork:
 		return fmt.Sprintf("dk network inspect %s >/dev/null 2>&1 || dk network create --label bastion.box-id=%s %s\n",
 			q(in.networkName()), q(in.BoxID), q(in.networkName())), nil
@@ -222,6 +224,17 @@ sudo -n rm -f %s %s
 echo "removed service %s; durable volumes were retained"
 `, q(in.containerName(svc)), q(dir),
 		q(in.secretEnvPath(svc)), q(in.stateDir()+"/services/"+svc+".json"), svc)
+}
+
+// shellLineBody appends the delimited shell-integration line to ~/.bashrc
+// once — the only edit bastion ever makes to a shell startup file (SPEC.md
+// §8.5). Appended at the end so it wins over the distribution's own PS1.
+func shellLineBody() string {
+	return `if ! grep -Fq ` + q(shellLineMarker) + ` "$HOME/.bashrc" 2>/dev/null; then
+  printf '\n%s\n' ` + q(shellLine) + ` >> "$HOME/.bashrc"
+fi
+echo "shell integration line ensured in ~/.bashrc"
+`
 }
 
 // markerWrite records completion state atomically as the step's last act.

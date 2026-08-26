@@ -36,6 +36,8 @@ host:
       target: ~/.tmux.conf
       mode: replace
       permissions: "0600"
+  shell:
+    prompt: dev
 volumes:
   data:
     persistence: durable

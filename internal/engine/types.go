@@ -64,6 +64,7 @@ const (
 	KindFeature       = "feature"
 	KindLocalFeature  = "local-feature"
 	KindFile          = "file"
+	KindShellLine     = "shell-line"
 	KindNetwork       = "network"
 	KindVolume        = "volume"
 	KindSecret        = "secret"

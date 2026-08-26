@@ -137,6 +137,20 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 				actions = append(actions, *act)
 			}
 		}
+
+		// 4. Shell integration: the managed shell.sh flows through the
+		// ordinary file pipeline; the .bashrc source line is its own step.
+		if box.Host.Shell != nil {
+			if act := fileActionFromContent(facts, ShellTarget, shellContent(box.Host.Shell.Prompt), "0644"); act != nil {
+				actions = append(actions, *act)
+			}
+			if !facts.ShellLine {
+				actions = append(actions, Action{
+					ID: "shell-line", Kind: KindShellLine,
+					Summary: "add the bastion shell-integration line to ~/.bashrc",
+				})
+			}
+		}
 	}
 
 	// 4. Runtime, volumes, secrets, services.
@@ -268,6 +282,12 @@ func planFile(in *Input, facts *Facts, mf config.ManagedFile) (*Action, error) {
 			return nil, err
 		}
 	}
+	return fileActionFromContent(facts, target, content, permissions), nil
+}
+
+// fileActionFromContent diffs desired file content against observed facts —
+// shared by definition-supplied managed files and generated ones (shell.sh).
+func fileActionFromContent(facts *Facts, target string, content []byte, permissions string) *Action {
 	sha := sha256hex(content)
 	fact := facts.Files[target]
 	_, managed := facts.Markers.Files[target]
@@ -275,7 +295,7 @@ func planFile(in *Input, facts *Facts, mf config.ManagedFile) (*Action, error) {
 	contentChanged := !fact.Exists || fact.SHA256 != sha
 	permsChanged := permissions != "" && fact.Exists && fact.Mode != strings.TrimPrefix(permissions, "0")
 	if !contentChanged && !permsChanged {
-		return nil, nil
+		return nil
 	}
 	root := !strings.HasPrefix(target, "~")
 	firstTouch := fact.Exists && !managed && !facts.Backups[target]
@@ -303,7 +323,7 @@ func planFile(in *Input, facts *Facts, mf config.ManagedFile) (*Action, error) {
 			Target: target, Content: content, SHA256: sha,
 			Mode: permissions, Root: root, FirstTouch: firstTouch,
 		},
-	}, nil
+	}
 }
 
 func planLocalFeature(in *Input, facts *Facts, uses string, with map[string]any) (*Action, error) {

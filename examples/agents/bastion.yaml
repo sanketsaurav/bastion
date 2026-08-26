@@ -46,6 +46,11 @@ host:
       mode: replace
       permissions: "0600"
 
+  # PS1 shows alice@<host> instead of the OS Login-derived username
+  # (ext_alice_example_com). Cosmetic: auth and `whoami` are unchanged.
+  shell:
+    prompt: alice
+
 volumes:
   db-data:
     persistence: durable

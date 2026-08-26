@@ -206,6 +206,9 @@ host:                               # (B)
       target: ~/.tmux.conf
       mode: replace                 # replace only; `template` reserved (Δ7)
       permissions: "0600"
+  shell:                            # (B)
+    prompt: alice                   # PS1 shows alice@<host> in place of the
+                                    # OS Login username; cosmetic only
 
 volumes:                            # (C)
   dashboard-data:
@@ -430,7 +433,14 @@ create/content/permission changes and deletions (deletion only when explicitly
 configured). First replacement of an unmanaged file keeps one recoverable
 backup unless opted out. Shell integration is exactly one delimited source line
 loading `~/.config/bastion/shell.sh` — Bastion never edits arbitrary regions of
-shell startup files. `template` mode (Δ7) renders the source locally at plan
+shell startup files. `host.shell.prompt` is the first use: it puts a chosen
+name into PS1 in place of the login username (OS Login derives unreadable
+`ext_…` names for external accounts, and the identity itself is directory
+data Bastion cannot rename). The integration file is a generated managed
+file flowing through the standard replace pipeline — digests, plans, and
+markers included — and the source line is appended once, delimited, at the
+end of `~/.bashrc` so it wins over the distribution's own PS1. Cosmetic
+only: authentication, `whoami`, and home directory are unchanged. `template` mode (Δ7) renders the source locally at plan
 time via Go text/template with the non-secret context `.Box.{Name,Labels}`,
 `.Provider.{Project,Zone,Instance}`, `.Workspace.{Mount,DataRoot}`; unknown
 keys are plan-time errors and secret values are never reachable.

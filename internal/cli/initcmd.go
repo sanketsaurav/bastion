@@ -37,6 +37,9 @@ host:
     - git
     - tmux
     - jq
+#  shell:
+#    prompt: yourname   # PS1 shows yourname@<host> instead of the OS Login
+#                       # username; cosmetic only — auth and whoami unchanged
 #  features:
 #    - uses: docker
 #    - uses: github-cli
