@@ -19,6 +19,22 @@ Real-GCP verification is manual for now: point a definition at a disposable
 Ubuntu 24.04 VM in a project you own and drive `doctor` → `plan` → `apply`.
 Never test against infrastructure you cannot afford to lose.
 
+## Layout
+
+```
+cmd/bastion/        entry point
+internal/cli/       command tree
+internal/config/    v1alpha1 schema, strict parsing, validation
+internal/registry/  box registrations and resolution
+internal/provider/  provider-neutral instance model
+internal/provider/gcp/  gcloud-wrapping provider (attached mode)
+internal/engine/    convergence: inspect/plan/apply, features, Compose, ingress
+internal/doctor/    environment diagnosis
+internal/execx/     process execution (real + fake runners)
+internal/lockfile/  local per-box operation lock
+examples/agents/    reference box definition
+```
+
 ## Design ground rules
 
 [SPEC.md](SPEC.md) is decision-complete and wins over code and over the
