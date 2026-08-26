@@ -19,10 +19,19 @@ jobs:
         with:
           go-version: "1.26"
       - uses: sigstore/cosign-installer@v3
+      - name: Extract release notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          awk -v v="## ${tag} " 'index($0, v) == 1 {f=1; next} /^## v/ {f=0} f' CHANGELOG.md > /tmp/notes.md 2>/dev/null || true
+          if ! [ -s /tmp/notes.md ]; then
+            echo "no CHANGELOG.md section for ${tag}; falling back to a commit list"
+            last=$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null) || last=""
+            git log ${last:+$last..}"${tag}" --oneline > /tmp/notes.md
+          fi
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes /tmp/notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

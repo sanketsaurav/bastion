@@ -60,11 +60,11 @@ homebrew_casks:
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bastion"]
           end
 
+# Release notes come from the tag's CHANGELOG.md section, extracted by the
+# release workflow (which falls back to a commit list when no section
+# matches) and passed via --release-notes.
 changelog:
-  use: git
-  filters:
-    exclude:
-      - "^docs:"
+  disable: true
 
 snapshot:
   version_template: "{{ incpatch .Version }}-dev"
