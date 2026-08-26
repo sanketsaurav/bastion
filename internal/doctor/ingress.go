@@ -30,17 +30,35 @@ func ingressChecks(ctx context.Context, d Deps, inst *provider.Instance) []Resul
 
 	results := []Result{staticIPCheck(ctx, d, ip)}
 
-	results = append(results, dnsCheck(ctx, d, "ingress: wildcard DNS *."+ing.BaseDomain,
+	wildcard := dnsCheck(ctx, d, "ingress: wildcard DNS *."+ing.BaseDomain,
 		"bastion-doctor-probe."+ing.BaseDomain, ip,
-		fmt.Sprintf("create a wildcard A record `*.%s → %s`; on Cloudflare set it to DNS only (grey cloud) — a proxied record breaks certificate issuance", ing.BaseDomain, ip)))
+		fmt.Sprintf("create a wildcard A record `*.%s → %s`; on Cloudflare set it to DNS only (grey cloud) — a proxied record breaks certificate issuance", ing.BaseDomain, ip))
 
+	// Per-host rows for hostnames the wildcard does not cover — every
+	// hostname when the wildcard is absent, custom domains always.
+	var hosts []Result
+	hostsOK := true
 	for _, pe := range d.Box.PublicEndpoints() {
-		if strings.HasSuffix(pe.Hostname, "."+ing.BaseDomain) {
+		if wildcard.Status == OK && strings.HasSuffix(pe.Hostname, "."+ing.BaseDomain) {
 			continue // covered by the wildcard
 		}
-		results = append(results, dnsCheck(ctx, d, "ingress: hostname "+pe.Hostname, pe.Hostname, ip,
-			fmt.Sprintf("create an A record `%s → %s` (DNS only if the zone is proxied)", pe.Hostname, ip)))
+		r := dnsCheck(ctx, d, "ingress: hostname "+pe.Hostname, pe.Hostname, ip,
+			fmt.Sprintf("create an A record `%s → %s` (DNS only if the zone is proxied)", pe.Hostname, ip))
+		if r.Status != OK {
+			hostsOK = false
+		}
+		hosts = append(hosts, r)
 	}
+
+	// Per-host records are a legitimate strategy: when every declared
+	// hostname resolves, a missing wildcard is advice, not a failure.
+	if wildcard.Status == Fail && hostsOK && len(hosts) > 0 {
+		wildcard.Status = Warn
+		wildcard.Detail = "no wildcard record, but every declared hostname resolves to " + ip
+		wildcard.Hint = fmt.Sprintf("works as-is; a wildcard `*.%s → %s` would make new apps zero-touch", ing.BaseDomain, ip)
+	}
+	results = append(results, wildcard)
+	results = append(results, hosts...)
 
 	results = append(results, portCheck(d, ip, "80"), portCheck(d, ip, "443"))
 	return results

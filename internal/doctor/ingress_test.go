@@ -118,6 +118,37 @@ func TestIngressChecks(t *testing.T) {
 	}
 }
 
+// Per-host records instead of a wildcard are legitimate: the wildcard row
+// must downgrade to a warning when every declared hostname resolves.
+func TestIngressPerHostRecordsWarnNotFail(t *testing.T) {
+	const ip = "203.0.113.7"
+	d := Deps{
+		Runner: &execx.Fake{Rules: []execx.Rule{{
+			Match:  execx.Prefix("gcloud", "compute", "addresses", "list"),
+			Result: execx.Result{Stdout: []byte(`[{"name":"static"}]`)},
+		}}},
+		Box: ingressBox(t),
+		LookupHost: func(_ context.Context, host string) ([]string, error) {
+			if strings.HasPrefix(host, "bastion-doctor-probe.") {
+				return nil, errors.New("no such host") // no wildcard
+			}
+			return []string{ip}, nil // every declared hostname resolves
+		},
+		DialTimeout: func(_, addr string, _ time.Duration) (net.Conn, error) {
+			return nil, errors.New("connection refused")
+		},
+	}
+	results := ingressChecks(context.Background(), d, &provider.Instance{Status: "RUNNING", ExternalIP: ip})
+	wildcard := findResult(t, results, "ingress: wildcard DNS *.apps.example.com")
+	if wildcard.Status != Warn || !strings.Contains(wildcard.Hint, "zero-touch") {
+		t.Errorf("per-host strategy must warn, not fail: %+v", wildcard)
+	}
+	blog := findResult(t, results, "ingress: hostname blog.apps.example.com")
+	if blog.Status != OK {
+		t.Errorf("resolving per-host record must pass: %+v", blog)
+	}
+}
+
 func TestIngressChecksNeedExternalIP(t *testing.T) {
 	d := Deps{Box: ingressBox(t)}
 	results := ingressChecks(context.Background(), d, &provider.Instance{Status: "RUNNING"})

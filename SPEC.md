@@ -558,7 +558,9 @@ Bastion still never touches DNS, IPs, or firewall rules. `doctor` checks the
 external IP is reserved (static), the wildcard and any custom hostnames
 resolve to it (calling out proxied/orange-cloud records, which break
 certificate issuance), and that 80/443 are reachable — distinguishing
-firewall drops from nothing-listening-yet. Removing the last public endpoint
+firewall drops from nothing-listening-yet. Per-host records instead of a
+wildcard are legitimate: when every declared hostname resolves, the missing
+wildcard downgrades to advice. Removing the last public endpoint
 plans a destructive proxy removal; private services never become public as a
 side effect of anything.
 
