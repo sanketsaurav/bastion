@@ -415,6 +415,26 @@ services:
 `
 	wantIssue(t, validateDoc(t, dup), "already used")
 
+	// The proxy binds host 80/443: private endpoints must stay off them.
+	wantIssue(t, validateDoc(t, minimalDoc+`
+ingress:
+  baseDomain: apps.example.com
+services:
+  web:
+    image: x
+    endpoints:
+      http:
+        containerPort: 80
+        visibility: public
+        auth: none
+  proxy-clash:
+    image: y
+    endpoints:
+      admin:
+        containerPort: 80
+        visibility: private
+`), "reserved for the ingress proxy")
+
 	// hostname/auth are public-only knobs.
 	wantIssue(t, validateDoc(t, minimalDoc+`
 services:

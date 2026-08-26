@@ -287,6 +287,11 @@ func (f *Facts) absorb(p []string) error {
 				if p[3] != "none" {
 					f.Ingress.ConfigDigest = p[3]
 				}
+				// Health carries the binding observation: a "running"
+				// proxy whose ports never got programmed serves nothing.
+				if len(p) >= 5 {
+					f.Ingress.Health = p[4]
+				}
 			}
 		}
 	case "marker":

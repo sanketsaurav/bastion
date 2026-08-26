@@ -39,7 +39,8 @@ else f docker absent; fi
 if dq network inspect bastion-testbox >/dev/null; then f network present; else f network absent; fi
 if dq container inspect bastion-testbox-_ingress >/dev/null; then
   st=$(dq inspect -f '{{.State.Status}}' bastion-testbox-_ingress); dg=$(dq inspect -f '{{index .Config.Labels "bastion.config-digest"}}' bastion-testbox-_ingress)
-  f ingx present "$st" "${dg:-none}"
+  pb=$(dq inspect -f '{{if index .NetworkSettings.Ports "443/tcp"}}bound{{else}}unbound{{end}}' bastion-testbox-_ingress)
+  f ingx present "$st" "${dg:-none}" "${pb:-unbound}"
 else f ingx absent; fi
 if dq container inspect bastion-testbox-db >/dev/null; then
   st=$(dq inspect -f '{{.State.Status}}' bastion-testbox-db); hl=$(dq inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' bastion-testbox-db)

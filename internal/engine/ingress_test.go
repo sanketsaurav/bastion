@@ -56,19 +56,37 @@ func TestPlanIngressLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids := strings.Join(actionIDs(fresh), "|")
-	if !strings.Contains(ids, "network|ingress|") {
-		t.Errorf("fresh plan must deploy ingress after the network, got %v", actionIDs(fresh))
+	// Ingress deploys last: a private endpoint migrating off 80/443 must
+	// release the host port before the proxy binds it.
+	ids := actionIDs(fresh)
+	if len(ids) == 0 || ids[len(ids)-1] != "ingress" {
+		t.Errorf("fresh plan must deploy ingress after service actions, got %v", ids)
 	}
 
-	// Converged: running container with the current digest → no action.
-	lines := append(convergedFactLines(t, in), "@f ingx present running "+digest)
+	// Converged: running container, current digest, ports bound → no action.
+	lines := append(convergedFactLines(t, in), "@f ingx present running "+digest+" bound")
 	plan, err := BuildPlan(in, mustParseFacts(t, lines))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(actionIDs(plan), "|"); strings.Contains(got, "ingress") {
 		t.Errorf("converged ingress must not replan, got %v", actionIDs(plan))
+	}
+
+	// Running with the right digest but unprogrammed bindings → recreate.
+	lines = append(convergedFactLines(t, in), "@f ingx present running "+digest+" unbound")
+	plan, err = BuildPlan(in, mustParseFacts(t, lines))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rebound := false
+	for _, act := range plan.Actions {
+		if act.Kind == KindIngress && strings.Contains(act.Summary, "port bindings missing") {
+			rebound = true
+		}
+	}
+	if !rebound {
+		t.Errorf("an unbound proxy must be recreated, got %v", actionIDs(plan))
 	}
 
 	// Route drift: stale digest → replace.

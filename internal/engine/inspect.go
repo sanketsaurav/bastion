@@ -84,10 +84,14 @@ m=$(cat %s 2>/dev/null || true); [ -n "$m" ] && f marker lfeature %s "$(eb "$m")
 else f docker absent; fi
 `)
 		w.linef(`if dq network inspect %s >/dev/null; then f network present; else f network absent; fi`, q(in.networkName()))
+		// A container can run with its port bindings silently unprogrammed
+		// (observed after a failed first start), so bindings are a fact of
+		// their own — "running" alone does not mean "serving".
 		w.linef(`if dq container inspect %s >/dev/null; then
   st=$(dq inspect -f '{{.State.Status}}' %s); dg=$(dq inspect -f '{{index .Config.Labels "bastion.config-digest"}}' %s)
-  f ingx present "$st" "${dg:-none}"
-else f ingx absent; fi`, q(in.ingressName()), q(in.ingressName()), q(in.ingressName()))
+  pb=$(dq inspect -f '{{if index .NetworkSettings.Ports "443/tcp"}}bound{{else}}unbound{{end}}' %s)
+  f ingx present "$st" "${dg:-none}" "${pb:-unbound}"
+else f ingx absent; fi`, q(in.ingressName()), q(in.ingressName()), q(in.ingressName()), q(in.ingressName()))
 	}
 	for _, name := range sortedKeys(box.Services) {
 		cname := in.containerName(name)

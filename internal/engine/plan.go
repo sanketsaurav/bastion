@@ -176,35 +176,10 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 		}
 	}
 
-	// Ingress proxy: deployed while public endpoints exist, removed when
-	// none remain. Certificate state is kept either way.
+	// Ingress removal runs before service actions: a private endpoint
+	// migrating onto 80/443 needs the proxy's binding released first.
 	pubs := box.PublicEndpoints()
-	switch {
-	case box.Ingress != nil && len(pubs) > 0:
-		caddyfile, compose, digest, err := GenIngress(in)
-		if err != nil {
-			return nil, err
-		}
-		if !facts.Ingress.Exists || facts.Ingress.ConfigDigest != digest || facts.Ingress.State != "running" {
-			reason := "create"
-			switch {
-			case facts.Ingress.Exists && facts.Ingress.ConfigDigest != digest:
-				reason = "routes changed; container will be replaced"
-			case facts.Ingress.Exists && facts.Ingress.State != "running":
-				reason = "not running"
-			}
-			detail := make([]string, 0, len(pubs))
-			for _, pe := range pubs {
-				detail = append(detail, fmt.Sprintf("https://%s → %s:%d", pe.Hostname, pe.Service, pe.ContainerPort))
-			}
-			actions = append(actions, Action{
-				ID: "ingress", Kind: KindIngress, RequiresRoot: true,
-				Summary: fmt.Sprintf("deploy ingress proxy (caddy) for %d public endpoint(s) (%s)", len(pubs), reason),
-				Detail:  detail,
-				ingress: &ingressAction{Caddyfile: caddyfile, Compose: compose, Digest: digest},
-			})
-		}
-	case facts.Ingress.Exists:
+	if (box.Ingress == nil || len(pubs) == 0) && facts.Ingress.Exists {
 		actions = append(actions, Action{
 			ID: "ingress-remove", Kind: KindIngressRemove, RequiresRoot: true, Destructive: true,
 			Summary: "remove ingress proxy (no public endpoints declared; certificate state is retained)",
@@ -234,6 +209,37 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 	}
 	actions = append(actions, serviceActs...)
 	plan.Notes = append(plan.Notes, notes...)
+
+	// Ingress deploys after service actions: a private endpoint migrating
+	// off 80/443 must release the host port before the proxy binds it.
+	if box.Ingress != nil && len(pubs) > 0 {
+		caddyfile, compose, digest, err := GenIngress(in)
+		if err != nil {
+			return nil, err
+		}
+		if !facts.Ingress.Exists || facts.Ingress.ConfigDigest != digest ||
+			facts.Ingress.State != "running" || facts.Ingress.Health == "unbound" {
+			reason := "create"
+			switch {
+			case facts.Ingress.Exists && facts.Ingress.ConfigDigest != digest:
+				reason = "routes changed; container will be replaced"
+			case facts.Ingress.Exists && facts.Ingress.State != "running":
+				reason = "not running"
+			case facts.Ingress.Exists && facts.Ingress.Health == "unbound":
+				reason = "port bindings missing; container will be recreated"
+			}
+			detail := make([]string, 0, len(pubs))
+			for _, pe := range pubs {
+				detail = append(detail, fmt.Sprintf("https://%s → %s:%d", pe.Hostname, pe.Service, pe.ContainerPort))
+			}
+			actions = append(actions, Action{
+				ID: "ingress", Kind: KindIngress, RequiresRoot: true,
+				Summary: fmt.Sprintf("deploy ingress proxy (caddy) for %d public endpoint(s) (%s)", len(pubs), reason),
+				Detail:  detail,
+				ingress: &ingressAction{Caddyfile: caddyfile, Compose: compose, Digest: digest},
+			})
+		}
+	}
 
 	// Orphaned durable volume directories: reported, never deleted here.
 	declaredDurable := map[string]bool{}

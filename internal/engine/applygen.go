@@ -231,14 +231,16 @@ echo "removed service %s; durable volumes were retained"
 }
 
 // ingressBody writes the generated Caddyfile and Compose project, then
-// converges the proxy container. The digest label inside the Compose file
-// changes with any route change, so `up -d` replaces the container.
+// converges the proxy container. --force-recreate because this step only
+// runs on drift: restarting a container whose previous start failed to
+// program its port bindings can come up "running" with none (observed
+// live) — a fresh create either binds or fails loudly.
 func ingressBody(in *Input, ia *ingressAction) string {
 	dir := in.ingressDir()
 	return fmt.Sprintf(`sudo -n mkdir -p %s %s %s
 printf %%s %s | base64 -d | sudo -n tee %s >/dev/null
 printf %%s %s | base64 -d | sudo -n tee %s >/dev/null
-dk compose -p %s -f %s up -d --pull missing --remove-orphans
+dk compose -p %s -f %s up -d --pull missing --remove-orphans --force-recreate
 `, q(dir), q(in.ingressDataDir()+"/data"), q(in.ingressDataDir()+"/config"),
 		q(b64(ia.Caddyfile)), q(dir+"/Caddyfile"),
 		q(b64(ia.Compose)), q(dir+"/compose.yaml"),

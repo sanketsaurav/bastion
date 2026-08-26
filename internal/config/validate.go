@@ -269,7 +269,8 @@ func (v *validator) services(b *Box) {
 	}
 
 	// Private endpoints publish on the VM loopback; their effective ports
-	// must be unique across the whole box (SPEC.md Δ11).
+	// must be unique across the whole box (SPEC.md Δ11) — and stay off
+	// 80/443 when ingress is enabled, which the proxy binds on the host.
 	used := map[int]string{}
 	for _, name := range sortedKeys(b.Services) {
 		for _, en := range sortedKeys(b.Services[name].Endpoints) {
@@ -278,6 +279,10 @@ func (v *validator) services(b *Box) {
 				continue
 			}
 			port := ep.EffectiveVMPort()
+			if b.Ingress != nil && (port == 80 || port == 443) {
+				v.addf("services.%s.endpoints.%s: VM port %d is reserved for the ingress proxy; set a different vmPort", name, en, port)
+				continue
+			}
 			if prev, taken := used[port]; taken {
 				v.addf("services.%s.endpoints.%s: VM port %d is already used by %s; set a distinct vmPort", name, en, port, prev)
 			} else {
