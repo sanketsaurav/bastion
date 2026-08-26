@@ -146,6 +146,32 @@ func mustJSON(t *testing.T, v any) string {
 	return string(data)
 }
 
+// Secret values never enter digests, so a rotated value is invisible to a
+// normal plan — RotateSecrets is the explicit gesture: rewrite the env file
+// and replace exactly the services that reference secrets.
+func TestPlanRotateSecrets(t *testing.T) {
+	in := fixtureInput(t)
+	in.RotateSecrets = true
+	plan, err := BuildPlan(in, mustParseFacts(t, convergedFactLines(t, in)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(actionIDs(plan), "|")
+	if !strings.Contains(got, "secret:web") || !strings.Contains(got, "service:web") {
+		t.Errorf("rotation must rewrite and redeploy the secreted service, got %v", actionIDs(plan))
+	}
+	if strings.Contains(got, "service:db") {
+		t.Errorf("services without secretRefs must not be touched, got %v", actionIDs(plan))
+	}
+	for _, act := range plan.Actions {
+		if act.ID == "service:web" {
+			if !strings.Contains(act.Summary, "secrets rotated") || !act.service.ForceRecreate {
+				t.Errorf("rotation must force-recreate with its reason, got %+v", act.Summary)
+			}
+		}
+	}
+}
+
 func TestPlanConvergedBoxIsEmpty(t *testing.T) {
 	in := fixtureInput(t)
 	plan, err := BuildPlan(in, mustParseFacts(t, convergedFactLines(t, in)))

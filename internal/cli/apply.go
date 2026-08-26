@@ -58,6 +58,7 @@ func (a *App) confirmExact(prompt, expected string) (bool, error) {
 
 func (a *App) applyCmd() *cobra.Command {
 	var healthTimeout time.Duration
+	var rotateSecrets bool
 	cmd := &cobra.Command{
 		Use:   "apply [box]",
 		Short: "Converge the box toward its declared configuration",
@@ -68,6 +69,7 @@ func (a *App) applyCmd() *cobra.Command {
 				return err
 			}
 			in := engineInput(res)
+			in.RotateSecrets = rotateSecrets
 			lock, err := a.lockBox(in.BoxID)
 			if err != nil {
 				return err
@@ -123,6 +125,8 @@ func (a *App) applyCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().DurationVar(&healthTimeout, "health-timeout", 2*time.Minute, "how long to wait for service health checks")
+	cmd.Flags().BoolVar(&rotateSecrets, "rotate-secrets", false,
+		"rewrite secret env files from freshly resolved values and replace the referencing containers (value changes are otherwise invisible to plans)")
 	return cmd
 }
 

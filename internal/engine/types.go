@@ -32,6 +32,12 @@ type Input struct {
 	Dir     string // box directory, anchors files/ and features/
 	BoxID   string // metadata.name in attached mode (SPEC.md Δ12)
 	Version string // CLI version, stamped into generated artifacts
+
+	// RotateSecrets forces secret env files to be rewritten from freshly
+	// resolved values and their referencing containers replaced. Secret
+	// values never enter digests (SPEC.md §9.4), so value changes are
+	// invisible to plans — rotation is this explicit gesture.
+	RotateSecrets bool
 }
 
 // BoxID derives the stable box identifier from a definition.
@@ -150,6 +156,10 @@ type serviceAction struct {
 	Image        string
 	PullPolicy   string
 	HasHealth    bool
+	// ForceRecreate replaces the container even when its compose file is
+	// unchanged — rotated secret env files are invisible to compose's own
+	// change detection.
+	ForceRecreate bool
 }
 
 // Plan is the ordered result of diffing desired state against observed facts.

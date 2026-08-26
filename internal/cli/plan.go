@@ -48,6 +48,7 @@ type planReport struct {
 
 func (a *App) planCmd() *cobra.Command {
 	var detailedExit bool
+	var rotateSecrets bool
 	cmd := &cobra.Command{
 		Use:   "plan [box]",
 		Short: "Show what apply would change (read-only)",
@@ -59,6 +60,7 @@ func (a *App) planCmd() *cobra.Command {
 			}
 			client := a.clientFor(res)
 			in := engineInput(res)
+			in.RotateSecrets = rotateSecrets
 			u := a.ui()
 			ctx := cmd.Context()
 
@@ -98,6 +100,8 @@ func (a *App) planCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&detailedExit, "detailed-exitcode", false, "exit 0 = no changes, 2 = changes proposed, 1 = error")
+	cmd.Flags().BoolVar(&rotateSecrets, "rotate-secrets", false,
+		"preview a secret rotation: the secret rewrites and container replacements apply --rotate-secrets would run")
 	return cmd
 }
 

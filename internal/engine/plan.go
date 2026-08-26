@@ -428,13 +428,15 @@ func planServices(in *Input, facts *Facts) ([]Action, []string, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		needsApply := !fact.Exists || fact.ConfigDigest != digest || fact.State != "running"
+		refs, hasSecrets := serviceSecretRefs(box, name)
+		rotate := in.RotateSecrets && hasSecrets
+		needsApply := !fact.Exists || fact.ConfigDigest != digest || fact.State != "running" || rotate
 		if mutableTag(svc.Image) {
 			notes = append(notes, fmt.Sprintf(
 				"service %q uses a mutable image reference (%s); pin a digest for reproducibility", name, svc.Image))
 		}
 
-		if refs, ok := serviceSecretRefs(box, name); ok {
+		if hasSecrets {
 			if needsApply || !facts.Secrets[name] {
 				actions = append(actions, Action{
 					ID: "secret:" + name, Kind: KindSecret, RequiresRoot: true,
@@ -452,6 +454,8 @@ func planServices(in *Input, facts *Facts) ([]Action, []string, error) {
 			reason = "configuration changed; container will be replaced"
 		case fact.Exists && fact.State != "running":
 			reason = "not running"
+		case rotate && fact.Exists:
+			reason = "secrets rotated; container will be replaced"
 		}
 		actions = append(actions, Action{
 			ID: "service:" + name, Kind: KindService, RequiresRoot: true,
@@ -460,7 +464,7 @@ func planServices(in *Input, facts *Facts) ([]Action, []string, error) {
 			service: &serviceAction{
 				Name: name, Compose: compose, ConfigDigest: digest,
 				Image: svc.Image, PullPolicy: svc.PullPolicy,
-				HasHealth: svc.Healthcheck != nil,
+				HasHealth: svc.Healthcheck != nil, ForceRecreate: rotate,
 			},
 		})
 		if svc.Healthcheck != nil {

@@ -198,12 +198,16 @@ func serviceBody(in *Input, sa *serviceAction) (string, error) {
 	if pull == "" {
 		pull = "missing"
 	}
+	recreate := ""
+	if sa.ForceRecreate {
+		recreate = " --force-recreate"
+	}
 	marker, _ := json.Marshal(ServiceMarker{Name: sa.Name, ConfigDigest: sa.ConfigDigest, Image: sa.Image})
 	return fmt.Sprintf(`sudo -n mkdir -p %s
 printf %%s %s | base64 -d | sudo -n tee %s >/dev/null
-dk compose -p %s -f %s up -d --pull %s --remove-orphans
+dk compose -p %s -f %s up -d --pull %s --remove-orphans%s
 `, q(dir), q(b64(sa.Compose)), q(in.composePath(sa.Name)),
-		q(in.projectName(sa.Name)), q(in.composePath(sa.Name)), pull) + markerWrite(in, "services", sa.Name, marker), nil
+		q(in.projectName(sa.Name)), q(in.composePath(sa.Name)), pull, recreate) + markerWrite(in, "services", sa.Name, marker), nil
 }
 
 func healthBody(in *Input, svc string, timeout time.Duration) string {

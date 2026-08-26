@@ -498,7 +498,11 @@ naming the volume — `--yes` or `--force` alone is never sufficient.
 
 Sources: local environment variable or local file (D7). Invariants — secret
 values never appear in: box configuration, local state, plans, logs, generated
-Compose content, command-line arguments, or recoverable digests. On the box
+Compose content, command-line arguments, or recoverable digests. A direct
+consequence: value changes are invisible to plans, so rotation is explicit —
+`apply --rotate-secrets` rewrites every secret env file from freshly resolved
+values and force-recreates the referencing containers (`plan
+--rotate-secrets` previews it). Nothing rotates implicitly. On the box
 they live under a Bastion-owned directory with restrictive permissions;
 generated Compose references those paths (`env_file`, file mounts). File mounts
 are preferred over env vars where the app allows; terminal output is redacted.
