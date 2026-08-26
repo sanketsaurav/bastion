@@ -2,6 +2,8 @@ package doctor
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -30,8 +32,12 @@ func ingressChecks(ctx context.Context, d Deps, inst *provider.Instance) []Resul
 
 	results := []Result{staticIPCheck(ctx, d, ip)}
 
+	// The probe label is random per run: a fixed name's pre-record
+	// NXDOMAIN gets negative-cached by resolvers, so doctor would keep
+	// doubting a freshly created wildcard until that TTL expired
+	// (observed live).
 	wildcard := dnsCheck(ctx, d, "ingress: wildcard DNS *."+ing.BaseDomain,
-		"bastion-doctor-probe."+ing.BaseDomain, ip,
+		probeLabel()+"."+ing.BaseDomain, ip,
 		fmt.Sprintf("create a wildcard A record `*.%s → %s`; on Cloudflare set it to DNS only (grey cloud) — a proxied record breaks certificate issuance", ing.BaseDomain, ip))
 
 	// Per-host rows for hostnames the wildcard does not cover — every
@@ -62,6 +68,14 @@ func ingressChecks(ctx context.Context, d Deps, inst *provider.Instance) []Resul
 
 	results = append(results, portCheck(d, ip, "80"), portCheck(d, ip, "443"))
 	return results
+}
+
+func probeLabel() string {
+	buf := make([]byte, 5)
+	if _, err := rand.Read(buf); err != nil {
+		return "bastion-probe-fallback"
+	}
+	return "bastion-probe-" + hex.EncodeToString(buf)
 }
 
 // staticIPCheck warns when the external IP is ephemeral: it changes across

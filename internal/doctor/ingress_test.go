@@ -129,7 +129,7 @@ func TestIngressPerHostRecordsWarnNotFail(t *testing.T) {
 		}}},
 		Box: ingressBox(t),
 		LookupHost: func(_ context.Context, host string) ([]string, error) {
-			if strings.HasPrefix(host, "bastion-doctor-probe.") {
+			if strings.HasPrefix(host, "bastion-probe-") {
 				return nil, errors.New("no such host") // no wildcard
 			}
 			return []string{ip}, nil // every declared hostname resolves
