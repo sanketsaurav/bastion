@@ -61,10 +61,12 @@ homebrew_casks:
           end
 
 # Release notes come from the tag's CHANGELOG.md section, extracted by the
-# release workflow (which falls back to a commit list when no section
-# matches) and passed via --release-notes.
+# release workflow (with a commit-list fallback) and passed via
+# --release-notes, which takes precedence over this generated changelog.
+# The changelog must stay enabled: disabling it makes goreleaser ignore
+# --release-notes too, publishing an empty body.
 changelog:
-  disable: true
+  use: git
 
 snapshot:
   version_template: "{{ incpatch .Version }}-dev"

@@ -111,8 +111,10 @@ gh api repos/sanketsaurav/homebrew-tap/contents/Casks/bastion.rb --jq .content \
 ```
 
 If the release notes came out as a commit list, the changelog header didn't
-match `## vX.Y.Z ` (the run logs say so). Fix `CHANGELOG.md` on master and
-re-sync just the notes — don't re-tag:
+match `## vX.Y.Z ` (the run logs say so). If they came out **empty**, the
+goreleaser changelog got disabled — it must stay enabled (`use: git`) or
+`--release-notes` is ignored. Either way, fix on master and re-sync just
+the notes — don't re-tag:
 
 ```sh
 awk -v v="## vX.Y.Z " 'index($0, v) == 1 {f=1; next} /^## v/ {f=0} f' CHANGELOG.md > /tmp/notes.md
