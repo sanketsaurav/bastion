@@ -175,6 +175,41 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 			})
 		}
 	}
+
+	// Ingress proxy: deployed while public endpoints exist, removed when
+	// none remain. Certificate state is kept either way.
+	pubs := box.PublicEndpoints()
+	switch {
+	case box.Ingress != nil && len(pubs) > 0:
+		caddyfile, compose, digest, err := GenIngress(in)
+		if err != nil {
+			return nil, err
+		}
+		if !facts.Ingress.Exists || facts.Ingress.ConfigDigest != digest || facts.Ingress.State != "running" {
+			reason := "create"
+			switch {
+			case facts.Ingress.Exists && facts.Ingress.ConfigDigest != digest:
+				reason = "routes changed; container will be replaced"
+			case facts.Ingress.Exists && facts.Ingress.State != "running":
+				reason = "not running"
+			}
+			detail := make([]string, 0, len(pubs))
+			for _, pe := range pubs {
+				detail = append(detail, fmt.Sprintf("https://%s → %s:%d", pe.Hostname, pe.Service, pe.ContainerPort))
+			}
+			actions = append(actions, Action{
+				ID: "ingress", Kind: KindIngress, RequiresRoot: true,
+				Summary: fmt.Sprintf("deploy ingress proxy (caddy) for %d public endpoint(s) (%s)", len(pubs), reason),
+				Detail:  detail,
+				ingress: &ingressAction{Caddyfile: caddyfile, Compose: compose, Digest: digest},
+			})
+		}
+	case facts.Ingress.Exists:
+		actions = append(actions, Action{
+			ID: "ingress-remove", Kind: KindIngressRemove, RequiresRoot: true, Destructive: true,
+			Summary: "remove ingress proxy (no public endpoints declared; certificate state is retained)",
+		})
+	}
 	for _, name := range sortedKeys(box.Volumes) {
 		vol := box.Volumes[name]
 		if vol.Persistence == "durable" && !facts.DurableVolumes[name] {

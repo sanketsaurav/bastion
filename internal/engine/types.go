@@ -66,6 +66,8 @@ const (
 	KindFile          = "file"
 	KindShellLine     = "shell-line"
 	KindNetwork       = "network"
+	KindIngress       = "ingress"
+	KindIngressRemove = "ingress-remove"
 	KindVolume        = "volume"
 	KindSecret        = "secret"
 	KindService       = "service"
@@ -94,7 +96,14 @@ type Action struct {
 	volume  *volumeAction
 	secret  *secretAction
 	service *serviceAction
+	ingress *ingressAction
 	target  string // service name for health/stop/remove
+}
+
+type ingressAction struct {
+	Caddyfile []byte
+	Compose   []byte
+	Digest    string
 }
 
 type fileAction struct {

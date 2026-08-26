@@ -32,6 +32,7 @@ func ValidateBox(b *Box, dir string) []string {
 	v.runtime(b.Runtime)
 	v.workspace(b.Workspace)
 	v.host(b.Host)
+	v.ingress(b.Ingress)
 	v.volumes(b.Volumes)
 	v.secrets(b.Secrets)
 	v.services(b)
@@ -251,6 +252,22 @@ func (v *validator) services(b *Box) {
 	}
 	v.dependencyCycles(b.Services)
 
+	// Public hostnames must be resolvable from configuration alone: every
+	// public endpoint gets exactly one effective hostname, unique box-wide.
+	hostnames := map[string]string{}
+	for _, pe := range b.PublicEndpoints() {
+		ref := pe.Service + ":" + pe.Endpoint
+		if pe.Hostname == "" {
+			v.addf("services.%s.endpoints.%s: hostname is required when a service declares more than one public endpoint", pe.Service, pe.Endpoint)
+			continue
+		}
+		if prev, taken := hostnames[pe.Hostname]; taken {
+			v.addf("services.%s.endpoints.%s: hostname %q is already used by %s", pe.Service, pe.Endpoint, pe.Hostname, prev)
+		} else {
+			hostnames[pe.Hostname] = ref
+		}
+	}
+
 	// Private endpoints publish on the VM loopback; their effective ports
 	// must be unique across the whole box (SPEC.md Δ11).
 	used := map[int]string{}
@@ -362,11 +379,62 @@ func (v *validator) service(b *Box, name string, s *Service) {
 		}
 		switch ep.Visibility {
 		case "internal", "private":
+			if ep.Hostname != "" {
+				v.addf("%s.hostname applies only to public endpoints", ef)
+			}
+			if ep.Auth != "" {
+				v.addf("%s.auth applies only to public endpoints", ef)
+			}
 		case "public":
-			v.issues = append(v.issues, reservedf(ef+".visibility", ep.Visibility, "public HTTPS ingress"))
+			if b.Ingress == nil {
+				v.addf("%s: public endpoints need a top-level ingress block with baseDomain", ef)
+			}
+			if ep.Protocol != "http" {
+				v.addf("%s: public endpoints support protocol \"http\" only (exposed as HTTPS)", ef)
+			}
+			switch ep.Auth {
+			case "none":
+			case "":
+				v.addf("%s.auth is required for a public endpoint: `auth: none` acknowledges the endpoint is internet-facing and the application owns authentication", ef)
+			case "basic":
+				v.issues = append(v.issues, reservedf(ef+".auth", ep.Auth, "ingress basic auth"))
+			default:
+				v.addf("%s.auth: must be \"none\", got %q", ef, ep.Auth)
+			}
+			if ep.Hostname != "" && !fqdn(ep.Hostname) {
+				v.addf("%s.hostname: %q is not a valid DNS name", ef, ep.Hostname)
+			}
 		default:
-			v.addf("%s.visibility: must be \"internal\" or \"private\", got %q", ef, ep.Visibility)
+			v.addf("%s.visibility: must be \"internal\", \"private\", or \"public\", got %q", ef, ep.Visibility)
 		}
+	}
+}
+
+// fqdn reports whether s is a lowercase DNS name of at least two labels.
+func fqdn(s string) bool {
+	labels := strings.Split(s, ".")
+	if len(labels) < 2 || len(s) > 253 {
+		return false
+	}
+	for _, l := range labels {
+		if !dnsLabelRe.MatchString(l) {
+			return false
+		}
+	}
+	return true
+}
+
+func (v *validator) ingress(ing *Ingress) {
+	if ing == nil {
+		return
+	}
+	if ing.BaseDomain == "" {
+		v.addf("ingress.baseDomain is required")
+	} else if !fqdn(ing.BaseDomain) {
+		v.addf("ingress.baseDomain: %q is not a valid DNS name", ing.BaseDomain)
+	}
+	if ing.ACMEEmail != "" && (!strings.Contains(ing.ACMEEmail, "@") || strings.ContainsAny(ing.ACMEEmail, " \t\"'")) {
+		v.addf("ingress.acmeEmail: %q is not a plausible email address", ing.ACMEEmail)
 	}
 }
 

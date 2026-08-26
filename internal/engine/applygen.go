@@ -72,6 +72,10 @@ func stepBody(in *Input, act *Action, opts ApplyOptions) (string, error) {
 	case KindNetwork:
 		return fmt.Sprintf("dk network inspect %s >/dev/null 2>&1 || dk network create --label bastion.box-id=%s %s\n",
 			q(in.networkName()), q(in.BoxID), q(in.networkName())), nil
+	case KindIngress:
+		return ingressBody(in, act.ingress), nil
+	case KindIngressRemove:
+		return ingressRemoveBody(in), nil
 	case KindVolume:
 		if act.volume.Ephemeral {
 			ev := in.ephemeralVolume(act.volume.Name)
@@ -224,6 +228,32 @@ sudo -n rm -f %s %s
 echo "removed service %s; durable volumes were retained"
 `, q(in.containerName(svc)), q(dir),
 		q(in.secretEnvPath(svc)), q(in.stateDir()+"/services/"+svc+".json"), svc)
+}
+
+// ingressBody writes the generated Caddyfile and Compose project, then
+// converges the proxy container. The digest label inside the Compose file
+// changes with any route change, so `up -d` replaces the container.
+func ingressBody(in *Input, ia *ingressAction) string {
+	dir := in.ingressDir()
+	return fmt.Sprintf(`sudo -n mkdir -p %s %s %s
+printf %%s %s | base64 -d | sudo -n tee %s >/dev/null
+printf %%s %s | base64 -d | sudo -n tee %s >/dev/null
+dk compose -p %s -f %s up -d --pull missing --remove-orphans
+`, q(dir), q(in.ingressDataDir()+"/data"), q(in.ingressDataDir()+"/config"),
+		q(b64(ia.Caddyfile)), q(dir+"/Caddyfile"),
+		q(b64(ia.Compose)), q(dir+"/compose.yaml"),
+		q(in.ingressName()), q(dir+"/compose.yaml"))
+}
+
+// ingressRemoveBody stops the proxy and removes its generated config.
+// Certificate state on the data root is deliberately retained: re-enabling
+// ingress must not re-issue certificates.
+func ingressRemoveBody(in *Input) string {
+	return fmt.Sprintf(`dk compose -p %s -f %s down --remove-orphans 2>/dev/null || dk rm -f %s 2>/dev/null || true
+sudo -n rm -rf %s
+echo "ingress proxy removed; certificate state under %s is retained"
+`, q(in.ingressName()), q(in.ingressDir()+"/compose.yaml"), q(in.ingressName()),
+		q(in.ingressDir()), in.ingressDataDir())
 }
 
 // shellLineBody appends the delimited shell-integration line to ~/.bashrc

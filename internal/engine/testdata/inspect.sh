@@ -37,6 +37,10 @@ if command -v docker >/dev/null 2>&1; then
   f docker present "$(eb "$(dq --version | head -1)")" "$(eb "$(dq compose version --short || true)")"
 else f docker absent; fi
 if dq network inspect bastion-testbox >/dev/null; then f network present; else f network absent; fi
+if dq container inspect bastion-testbox-_ingress >/dev/null; then
+  st=$(dq inspect -f '{{.State.Status}}' bastion-testbox-_ingress); dg=$(dq inspect -f '{{index .Config.Labels "bastion.config-digest"}}' bastion-testbox-_ingress)
+  f ingx present "$st" "${dg:-none}"
+else f ingx absent; fi
 if dq container inspect bastion-testbox-db >/dev/null; then
   st=$(dq inspect -f '{{.State.Status}}' bastion-testbox-db); hl=$(dq inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' bastion-testbox-db)
   dg=$(dq inspect -f '{{index .Config.Labels "bastion.config-digest"}}' bastion-testbox-db); im=$(dq inspect -f '{{.Config.Image}}' bastion-testbox-db)

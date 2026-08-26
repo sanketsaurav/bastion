@@ -129,8 +129,10 @@ func TestReservedValues(t *testing.T) {
 		doc := strings.Replace(minimalDoc, "name: gcp", "name: gcp\n  mode: managed", 1)
 		wantIssue(t, validateDoc(t, doc), "reserved for a later milestone")
 	})
-	t.Run("public visibility", func(t *testing.T) {
+	t.Run("public basic auth", func(t *testing.T) {
 		doc := minimalDoc + `
+ingress:
+  baseDomain: apps.example.com
 services:
   web:
     image: x
@@ -138,6 +140,7 @@ services:
       http:
         containerPort: 80
         visibility: public
+        auth: basic
 `
 		wantIssue(t, validateDoc(t, doc), "reserved for a later milestone")
 	})
@@ -334,6 +337,95 @@ secrets:
 	issues := validateDoc(t, doc)
 	wantIssue(t, issues, "not both")
 	wantIssue(t, issues, "exactly one")
+}
+
+func TestIngressValidation(t *testing.T) {
+	public := func(extra string) string {
+		return minimalDoc + `
+ingress:
+  baseDomain: apps.example.com
+services:
+  web:
+    image: x
+    endpoints:
+      http:
+        containerPort: 80
+        visibility: public
+` + extra
+	}
+
+	if issues := validateDoc(t, public("        auth: none\n")); len(issues) != 0 {
+		t.Fatalf("valid public endpoint rejected: %v", issues)
+	}
+	// The auth policy is the internet-facing acknowledgement — required.
+	wantIssue(t, validateDoc(t, public("")), "auth is required")
+	wantIssue(t, validateDoc(t, minimalDoc+`
+services:
+  web:
+    image: x
+    endpoints:
+      http:
+        containerPort: 80
+        visibility: public
+        auth: none
+`), "ingress block")
+	wantIssue(t, validateDoc(t, public("        auth: none\n        protocol: tcp\n")), "protocol \"http\" only")
+	wantIssue(t, validateDoc(t, strings.Replace(public("        auth: none\n"),
+		"baseDomain: apps.example.com", "baseDomain: not_a_domain", 1)), "not a valid DNS name")
+
+	// Two public endpoints on one service: each needs an explicit hostname.
+	multi := minimalDoc + `
+ingress:
+  baseDomain: apps.example.com
+services:
+  web:
+    image: x
+    endpoints:
+      http:
+        containerPort: 80
+        visibility: public
+        auth: none
+      admin:
+        containerPort: 81
+        visibility: public
+        auth: none
+`
+	wantIssue(t, validateDoc(t, multi), "hostname is required")
+
+	// Hostnames are unique box-wide, derived ones included.
+	dup := minimalDoc + `
+ingress:
+  baseDomain: apps.example.com
+services:
+  web:
+    image: x
+    endpoints:
+      http:
+        containerPort: 80
+        visibility: public
+        auth: none
+  other:
+    image: y
+    endpoints:
+      http:
+        containerPort: 82
+        visibility: public
+        auth: none
+        hostname: web.apps.example.com
+`
+	wantIssue(t, validateDoc(t, dup), "already used")
+
+	// hostname/auth are public-only knobs.
+	wantIssue(t, validateDoc(t, minimalDoc+`
+services:
+  web:
+    image: x
+    endpoints:
+      http:
+        containerPort: 80
+        visibility: private
+        hostname: x.example.com
+`), "applies only to public")
 }
 
 func TestShellValidation(t *testing.T) {

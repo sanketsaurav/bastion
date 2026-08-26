@@ -13,6 +13,7 @@ type endpointRow struct {
 	Protocol      string `json:"protocol"`
 	Visibility    string `json:"visibility"`
 	VMPort        int    `json:"vmPort,omitempty"`
+	Hostname      string `json:"hostname,omitempty"`
 	Access        string `json:"access"`
 }
 
@@ -31,6 +32,10 @@ func (a *App) endpointCmd() *cobra.Command {
 				return err
 			}
 			box := res.Loaded.Box
+			hostnames := map[string]string{}
+			for _, pe := range box.PublicEndpoints() {
+				hostnames[pe.Service+":"+pe.Endpoint] = pe.Hostname
+			}
 			var rows []endpointRow
 			for _, svc := range sortedServiceNames(res) {
 				s := box.Services[svc]
@@ -44,6 +49,9 @@ func (a *App) endpointCmd() *cobra.Command {
 					case "private":
 						row.VMPort = ep.EffectiveVMPort()
 						row.Access = fmt.Sprintf("bastion port %s %s:%s", box.Metadata.Name, svc, en)
+					case "public":
+						row.Hostname = hostnames[svc+":"+en]
+						row.Access = "https://" + row.Hostname
 					default:
 						row.Access = fmt.Sprintf("%s:%d on the box network", svc, ep.ContainerPort)
 					}

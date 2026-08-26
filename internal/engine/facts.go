@@ -34,6 +34,9 @@ type Facts struct {
 	// shell-integration source line (observed only when host.shell is set).
 	ShellLine bool
 
+	// Ingress is the bastion-managed reverse-proxy container, when present.
+	Ingress ServiceFact
+
 	Docker           DockerFacts
 	Services         map[string]ServiceFact // declared and discovered, by service name
 	Orphans          []string               // bastion-labeled services no longer declared
@@ -276,6 +279,16 @@ func (f *Facts) absorb(p []string) error {
 		}
 	case "shline":
 		f.ShellLine = len(p) >= 2 && p[1] == "present"
+	case "ingx":
+		if len(p) >= 2 {
+			f.Ingress.Exists = p[1] == "present"
+			if f.Ingress.Exists && len(p) >= 4 {
+				f.Ingress.State = p[2]
+				if p[3] != "none" {
+					f.Ingress.ConfigDigest = p[3]
+				}
+			}
+		}
 	case "marker":
 		if len(p) >= 4 {
 			raw, err := b64dec(p[3])

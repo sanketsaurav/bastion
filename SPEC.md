@@ -38,7 +38,7 @@ Resolutions to draft 0.1's open questions, plus deliberate deltas from its text.
 | D3 | Guest support | Ubuntu 24.04 LTS (`amd64`/`arm64`) only. Detected and enforced before any host mutation. |
 | D4 | Runtime | Docker Engine + Compose v2 only. The schema speaks OCI; runtime parity with Podman is not assumed or attempted. |
 | D5 | Local features | Built-in features ship first (milestone B); the local feature contract ships in the same milestone, after built-ins work. The contract is designed now so built-ins are implemented against it. |
-| D6 | Public auth | Moot for v1 — public endpoints are deferred with managed mode (they need firewall + IP management Bastion doesn't do in attached mode). Schema reserves `visibility: public` and rejects it with a pointer to this section. |
+| D6 | Public auth | **Revised 2026-08-26 (milestone D, §9.8):** public HTTP endpoints ship in attached mode via a managed Caddy proxy; the firewall/IP/DNS work stays the user's, verified by `doctor`. The required `auth` field is the internet-facing acknowledgement — `auth: none` declares the app owns authentication; `basic` is reserved for a follow-up. Public TCP passthrough stays out of scope. |
 | D7 | Secrets | Environment-variable and local-file sources only. GCP Secret Manager and keychains deferred. |
 | D8 | Compose stacks | Deferred. One service = one container. |
 | D9 | Idle shutdown | Deferred with managed mode. When it lands it will be an opt-in systemd timer on the VM — a deliberate, documented exception to "no resident daemon". |
@@ -210,6 +210,10 @@ host:                               # (B)
     prompt: alice                   # PS1 shows alice@<host> in place of the
                                     # OS Login username; cosmetic only
 
+ingress:                            # (D) enables public endpoints (§9.8)
+  baseDomain: apps.example.com      # default hostname: <service>.<baseDomain>
+  acmeEmail: alice@example.com      # optional; CA expiry notices
+
 volumes:                            # (C)
   dashboard-data:
     persistence: durable            # durable | ephemeral
@@ -252,8 +256,11 @@ services:                           # (C)
       web:
         containerPort: 3000
         protocol: http              # http (default) | tcp
-        visibility: private         # internal (default) | private; `public` reserved
+        visibility: private         # internal (default) | private | public (§9.8)
         # vmPort: 43000             # private only; VM loopback port (default: containerPort, unique per box) (Δ11)
+        # public only:
+        # auth: none                # required; the internet-facing acknowledgement. `basic` reserved
+        # hostname: app.example.com # overrides <service>.<baseDomain>; required with >1 public endpoint per service
 ```
 
 Semantic validation (enforced by `bastion validate` and before every plan):
@@ -503,7 +510,8 @@ container port publishes on the VM's loopback only, at `vmPort` (default
 `containerPort`; effective ports unique per box, Δ11); `bastion port <box>
 <service>:<endpoint>` opens an `ssh -L` forward to it (Δ3) and prints the local
 URL. No GCP firewall is ever touched for a private endpoint; nothing publishes
-on `0.0.0.0`. `public` is reserved (D6).
+on `0.0.0.0` except the managed ingress proxy (§9.8). `public` routes through
+that proxy — user services never publish public ports themselves.
 
 ### 9.6 Isolation defaults
 
@@ -521,6 +529,38 @@ deleted only after confirmation. Containers without Bastion labels are never
 touched. `up` starts declared services and waits for health checks up to a
 deadline; an unhealthy service fails `up` without rolling back unrelated
 successes.
+
+### 9.8 Public endpoints and ingress (milestone D)
+
+A top-level `ingress` block with a `baseDomain` enables `visibility: public`
+on HTTP endpoints. One wildcard DNS record (`*.<baseDomain>` → the VM's
+static IP) covers every derived hostname, so hosting another app is a pure
+configuration change: a service with exactly one public endpoint is served
+at `<service>.<baseDomain>`; `hostname` overrides it (and is required when a
+service declares several public endpoints). Effective hostnames are unique
+box-wide.
+
+Bastion manages one Caddy container (pinned image, generated Caddyfile and
+Compose project, digest-labeled like any service): it binds 80/443 (and
+443/udp for HTTP/3), joins the box network, routes by hostname to
+`<service>:<containerPort>`, redirects HTTP to HTTPS, and issues per-host
+certificates automatically via ACME — which is why no DNS-provider API is
+needed. Certificate state lives at `<dataRoot>/ingress` and survives proxy
+removal, so re-enabling ingress never re-issues certificates. The proxy gets
+no Docker socket and `admin off`.
+
+`auth` is required on every public endpoint and is the internet-facing
+acknowledgement: `auth: none` states, in versioned configuration, that the
+application owns authentication. `basic` is reserved for a follow-up. Public
+TCP passthrough is out of scope (D6): `protocol: http` only.
+
+Bastion still never touches DNS, IPs, or firewall rules. `doctor` checks the
+external IP is reserved (static), the wildcard and any custom hostnames
+resolve to it (calling out proxied/orange-cloud records, which break
+certificate issuance), and that 80/443 are reachable — distinguishing
+firewall drops from nothing-listening-yet. Removing the last public endpoint
+plans a destructive proxy removal; private services never become public as a
+side effect of anything.
 
 ## 10. Plan and apply (milestone B)
 
@@ -688,10 +728,23 @@ transactional. The standing guarantees are marker-last writes, a
 serializing lock that self-releases on every death the guest can observe,
 and refusals that carry their own recovery.
 
+**D — public ingress** *(implemented 2026-08-26; §9.8)*: `ingress.baseDomain`
++ `visibility: public` + required `auth` acknowledgement; generated
+Caddyfile/Compose with digest-labeled proxy container; per-host ACME (no
+DNS-provider API); hostname derivation and box-wide uniqueness; destructive
+proxy removal retaining certificate state; doctor checks for static IP,
+wildcard/custom DNS (flagging proxied records), and 80/443 reachability;
+`endpoint list` URLs.
+*Exit:* a real app (museletter) serves HTTPS on a subdomain of a
+user-configured base domain with a wildcard record created once; a second
+app needs only yaml; removing the last public endpoint removes the proxy and
+keeps certificates.
+
 **Deferred** (design intact in `docs/original-spec.md`): managed GCP
-infrastructure; public HTTPS ingress (Caddy), static IPs, Cloud DNS; snapshot
-schedules; idle shutdown; Compose stacks; Podman; other clouds; GCP Secret
-Manager; Windows client; IDE helpers; feature marketplace.
+infrastructure; ingress basic auth; Cloudflare Tunnel as an alternate
+ingress provider; Cloud DNS record management; public TCP passthrough;
+snapshot schedules; idle shutdown; Compose stacks; Podman; other clouds; GCP
+Secret Manager; Windows client; IDE helpers; feature marketplace.
 
 ## 15. Version 1 acceptance
 

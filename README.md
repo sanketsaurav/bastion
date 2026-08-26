@@ -38,6 +38,12 @@ claude-code, local feature scripts, managed dotfiles) and one-container
 services (with durable volumes, secrets, and loopback-only private endpoints)
 all converge from the definition — idempotently, with a read-only plan first.
 
+Services can also go public: declare `ingress.baseDomain`, point one wildcard
+DNS record at the VM, and any endpoint marked `visibility: public` (with an
+explicit `auth` policy) is served at `https://<service>.<baseDomain>` through
+a bastion-managed Caddy proxy with automatic per-host certificates. Hosting
+the next mini app is a yaml change.
+
 ## Getting started
 
 Requires Go 1.26+ to build and the [gcloud CLI](https://cloud.google.com/sdk)

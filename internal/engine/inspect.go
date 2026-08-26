@@ -70,7 +70,7 @@ m=$(cat %s 2>/dev/null || true); [ -n "$m" ] && f marker lfeature %s "$(eb "$m")
 	}
 
 	// Container runtime, services, volumes.
-	needsDocker := len(box.Services) > 0 || len(box.Volumes) > 0
+	needsDocker := len(box.Services) > 0 || len(box.Volumes) > 0 || box.Ingress != nil
 	if !needsDocker && box.Host != nil {
 		for _, feat := range box.Host.Features {
 			if feat.Uses == "docker" {
@@ -84,6 +84,10 @@ m=$(cat %s 2>/dev/null || true); [ -n "$m" ] && f marker lfeature %s "$(eb "$m")
 else f docker absent; fi
 `)
 		w.linef(`if dq network inspect %s >/dev/null; then f network present; else f network absent; fi`, q(in.networkName()))
+		w.linef(`if dq container inspect %s >/dev/null; then
+  st=$(dq inspect -f '{{.State.Status}}' %s); dg=$(dq inspect -f '{{index .Config.Labels "bastion.config-digest"}}' %s)
+  f ingx present "$st" "${dg:-none}"
+else f ingx absent; fi`, q(in.ingressName()), q(in.ingressName()), q(in.ingressName()))
 	}
 	for _, name := range sortedKeys(box.Services) {
 		cname := in.containerName(name)

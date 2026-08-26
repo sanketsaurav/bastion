@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +41,11 @@ type Deps struct {
 	LookPath func(string) (string, error)
 	Client   *gcp.Client
 	Box      *config.Box
+
+	// LookupHost and DialTimeout back the ingress checks; nil selects the
+	// real resolver and dialer.
+	LookupHost  func(ctx context.Context, host string) ([]string, error)
+	DialTimeout func(network, addr string, timeout time.Duration) (net.Conn, error)
 }
 
 // Failed reports whether any check failed outright.
@@ -120,6 +126,9 @@ func Run(ctx context.Context, d Deps) []Result {
 			add(Result{Name: "SSH reachability", Status: OK, Detail: "remote command executed"})
 			results = append(results, guestChecks(ctx, d)...)
 		}
+	}
+	if d.Box.Ingress != nil {
+		results = append(results, ingressChecks(ctx, d, inst)...)
 	}
 	return results
 }

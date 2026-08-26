@@ -51,6 +51,12 @@ host:
   shell:
     prompt: alice
 
+# Public HTTPS ingress: one wildcard DNS record (*.apps.example.com → the
+# VM's static IP, DNS-only if proxied) serves every public endpoint at
+# <service>.<baseDomain>. `bastion doctor` verifies the setup.
+ingress:
+  baseDomain: apps.example.com
+
 volumes:
   db-data:
     persistence: durable
@@ -111,4 +117,5 @@ services:
       web:
         containerPort: 3000
         protocol: http
-        visibility: private
+        visibility: public          # https://dashboard.apps.example.com
+        auth: none                  # acknowledged: the app owns authentication

@@ -35,10 +35,23 @@ type Box struct {
 	Runtime    *Runtime    `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	Workspace  *Workspace  `yaml:"workspace,omitempty" json:"workspace,omitempty"`
 	Host       *Host       `yaml:"host,omitempty" json:"host,omitempty"`
+	Ingress    *Ingress    `yaml:"ingress,omitempty" json:"ingress,omitempty"`
 
 	Volumes  map[string]Volume  `yaml:"volumes,omitempty" json:"volumes,omitempty"`
 	Secrets  map[string]Secret  `yaml:"secrets,omitempty" json:"secrets,omitempty"`
 	Services map[string]Service `yaml:"services,omitempty" json:"services,omitempty"`
+}
+
+// Ingress enables public HTTPS endpoints through a bastion-managed reverse
+// proxy (SPEC.md §9.8). Bastion never manages DNS, IPs, or firewall rules —
+// `doctor` verifies the required records and reachability instead.
+type Ingress struct {
+	// BaseDomain gives every public endpoint its default hostname,
+	// <service>.<baseDomain>; one wildcard DNS record covers all of them.
+	BaseDomain string `yaml:"baseDomain" json:"baseDomain" jsonschema:"required"`
+	// ACMEEmail is optionally registered with the certificate authority
+	// for expiry notices.
+	ACMEEmail string `yaml:"acmeEmail,omitempty" json:"acmeEmail,omitempty"`
 }
 
 type Metadata struct {
@@ -185,6 +198,16 @@ type Endpoint struct {
 	// VMPort is the VM loopback port a private endpoint publishes on
 	// (default: containerPort). Must be unique across the box (SPEC.md Δ11).
 	VMPort int `yaml:"vmPort,omitempty" json:"vmPort,omitempty" jsonschema:"minimum=1,maximum=65535"`
+
+	// Hostname overrides a public endpoint's derived name
+	// (<service>.<baseDomain>). Required when a service declares more than
+	// one public endpoint.
+	Hostname string `yaml:"hostname,omitempty" json:"hostname,omitempty"`
+	// Auth is the declared access policy of a public endpoint and doubles
+	// as the internet-facing acknowledgement: "none" states the application
+	// owns authentication. Required when visibility is public. "basic" is
+	// reserved.
+	Auth string `yaml:"auth,omitempty" json:"auth,omitempty" jsonschema:"enum=none,enum=basic"`
 }
 
 // EffectiveVMPort returns the loopback port a private endpoint binds on the VM.
@@ -193,6 +216,51 @@ func (e Endpoint) EffectiveVMPort() int {
 		return e.VMPort
 	}
 	return e.ContainerPort
+}
+
+// PublicEndpoint is one internet-facing endpoint with its effective hostname.
+type PublicEndpoint struct {
+	Service       string
+	Endpoint      string
+	Hostname      string // empty ⇒ an explicit hostname is required (validation rejects)
+	ContainerPort int
+	Auth          string
+}
+
+// PublicEndpoints resolves every public endpoint and its effective hostname
+// in deterministic order. A service with exactly one public endpoint gets
+// <service>.<baseDomain> unless the endpoint sets hostname; with more than
+// one, each endpoint must set its own (validated, reported here as "").
+func (b *Box) PublicEndpoints() []PublicEndpoint {
+	base := ""
+	if b.Ingress != nil {
+		base = b.Ingress.BaseDomain
+	}
+	var out []PublicEndpoint
+	for _, svc := range sortedKeys(b.Services) {
+		s := b.Services[svc]
+		public := 0
+		for _, ep := range s.Endpoints {
+			if ep.Visibility == "public" {
+				public++
+			}
+		}
+		for _, en := range sortedKeys(s.Endpoints) {
+			ep := s.Endpoints[en]
+			if ep.Visibility != "public" {
+				continue
+			}
+			hostname := ep.Hostname
+			if hostname == "" && public == 1 && base != "" {
+				hostname = svc + "." + base
+			}
+			out = append(out, PublicEndpoint{
+				Service: svc, Endpoint: en, Hostname: hostname,
+				ContainerPort: ep.ContainerPort, Auth: ep.Auth,
+			})
+		}
+	}
+	return out
 }
 
 // Normalize fills defaulted fields in place. Parse calls it before validation,
