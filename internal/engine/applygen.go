@@ -237,8 +237,8 @@ echo "removed service %s; durable volumes were retained"
 // ingressBody writes the generated Caddyfile and Compose project, then
 // converges the proxy container. --force-recreate because this step only
 // runs on drift: restarting a container whose previous start failed to
-// program its port bindings can come up "running" with none (observed
-// live) — a fresh create either binds or fails loudly.
+// program its port bindings can come up "running" with none — a fresh
+// create either binds or fails loudly.
 func ingressBody(in *Input, ia *ingressAction) string {
 	dir := in.ingressDir()
 	return fmt.Sprintf(`sudo -n mkdir -p %s %s %s

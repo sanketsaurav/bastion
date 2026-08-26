@@ -11,7 +11,7 @@ no team layer, no daemon on the VM.
 > secrets, private endpoints) are covered by fake-transport tests and have
 > been exercised live: fresh-VM convergence, idempotent re-plans, drift
 > repair, private-endpoint tunnels, and interrupted-apply recovery.
-> The name `bastion` is a working title. See [SPEC.md](SPEC.md) for the full
+> See [SPEC.md](SPEC.md) for the full
 > specification and [docs/original-spec.md](docs/original-spec.md) for the
 > long-form design rationale.
 

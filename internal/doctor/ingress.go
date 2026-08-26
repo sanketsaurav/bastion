@@ -34,8 +34,7 @@ func ingressChecks(ctx context.Context, d Deps, inst *provider.Instance) []Resul
 
 	// The probe label is random per run: a fixed name's pre-record
 	// NXDOMAIN gets negative-cached by resolvers, so doctor would keep
-	// doubting a freshly created wildcard until that TTL expired
-	// (observed live).
+	// doubting a freshly created wildcard until that TTL expired.
 	wildcard := dnsCheck(ctx, d, "ingress: wildcard DNS *."+ing.BaseDomain,
 		probeLabel()+"."+ing.BaseDomain, ip,
 		fmt.Sprintf("create a wildcard A record `*.%s → %s`; on Cloudflare set it to DNS only (grey cloud) — a proxied record breaks certificate issuance", ing.BaseDomain, ip))

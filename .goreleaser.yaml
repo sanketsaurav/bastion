@@ -38,12 +38,10 @@ signs:
       - ${artifact}
     artifacts: checksum
 
-# Same installation path as museletter: the sanketsaurav/homebrew-tap repo,
-# committed by the release run via the HOMEBREW_TAP_TOKEN fine-grained PAT
-# (contents:write on the tap repo — the same secret museletter's workflow
-# uses; add it to this repo's Actions secrets before the first tag).
-# goreleaser ships CLI binaries as casks now; the post-install hook strips
-# Gatekeeper quarantine from the unsigned binary.
+# Published into the sanketsaurav/homebrew-tap repo by the release run via
+# the HOMEBREW_TAP_TOKEN repo secret (a fine-grained PAT with contents:write
+# on the tap). goreleaser ships CLI binaries as casks; the post-install hook
+# strips Gatekeeper quarantine from the unsigned binary.
 homebrew_casks:
   - repository:
       owner: sanketsaurav

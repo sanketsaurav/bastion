@@ -85,8 +85,8 @@ else f docker absent; fi
 `)
 		w.linef(`if dq network inspect %s >/dev/null; then f network present; else f network absent; fi`, q(in.networkName()))
 		// A container can run with its port bindings silently unprogrammed
-		// (observed after a failed first start), so bindings are a fact of
-		// their own — "running" alone does not mean "serving".
+		// after a failed first start, so bindings are a fact of their own —
+		// "running" alone does not mean "serving".
 		w.linef(`if dq container inspect %s >/dev/null; then
   st=$(dq inspect -f '{{.State.Status}}' %s); dg=$(dq inspect -f '{{index .Config.Labels "bastion.config-digest"}}' %s)
   pb=$(dq inspect -f '{{if index .NetworkSettings.Ports "443/tcp"}}bound{{else}}unbound{{end}}' %s)

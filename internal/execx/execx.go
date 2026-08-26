@@ -36,10 +36,10 @@ type Local struct{}
 
 // command builds a captured-output command in its own process group so that
 // cancellation reaches grandchildren too: the transport wraps ssh (gcloud →
-// ssh), and interrupting only the wrapper orphans the live connection — the
-// remote runner then finishes the whole plan unmonitored (observed live,
-// SPEC.md §14). Interrupt rather than SIGKILL so ssh and gcloud tear down
-// cleanly; escalation happens after WaitDelay.
+// ssh), and interrupting only the wrapper orphans the live connection, which
+// leaves the remote runner finishing the whole plan unmonitored. Interrupt
+// rather than SIGKILL so ssh and gcloud tear down cleanly; escalation
+// happens after WaitDelay.
 func command(ctx context.Context, argv []string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

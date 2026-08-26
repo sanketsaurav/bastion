@@ -1,9 +1,9 @@
 # Bastion — specification
 
 - Status: Active (supersedes `docs/original-spec.md`, draft 0.1)
-- Specification version: 0.2
+- Specification version: 0.3
 - Configuration API: `bastion/v1alpha1`
-- Last updated: 2026-08-12
+- Last updated: 2026-08-26
 
 Bastion is a local, config-driven CLI for operating a personal Linux development
 box on Google Compute Engine. The CLI on your computer is the control plane:
@@ -33,7 +33,7 @@ Resolutions to draft 0.1's open questions, plus deliberate deltas from its text.
 
 | # | Question | Decision |
 |---|----------|----------|
-| D1 | Public name | `bastion` stays as the **working name**; binary and Go module are placeholders, and the naming decision is a release blocker for open-sourcing, not for development. The project needs **no domain**: the apiVersion group is a bare `bastion/` (the config is read only by this CLI, so a DNS-style namespace buys nothing — skaffold precedent) and tracks the final name. Docs live under sanketsaurav.com/bastion, which also serves the published JSON Schema (`$id` points there). |
+| D1 | Public name | **`bastion`, final** (decided 2026-08-26). The project needs no domain: the apiVersion group is a bare `bastion/` (the config is read only by this CLI, so a DNS-style namespace buys nothing — skaffold precedent). Docs live under sanketsaurav.com/bastion, which also serves the published JSON Schema (`$id` points there). |
 | D2 | Initial scope | **Attached mode only.** Version 1 = lifecycle + host convergence + container services against an existing VM. Managed infrastructure (VM/disk/firewall creation) is deferred entirely; existing Terraform keeps owning infra. |
 | D3 | Guest support | Ubuntu 24.04 LTS (`amd64`/`arm64`) only. Detected and enforced before any host mutation. |
 | D4 | Runtime | Docker Engine + Compose v2 only. The schema speaks OCI; runtime parity with Podman is not assumed or attempted. |
@@ -42,7 +42,7 @@ Resolutions to draft 0.1's open questions, plus deliberate deltas from its text.
 | D7 | Secrets | Environment-variable and local-file sources only. GCP Secret Manager and keychains deferred. |
 | D8 | Compose stacks | Deferred. One service = one container. |
 | D9 | Idle shutdown | Deferred with managed mode. When it lands it will be an opt-in systemd timer on the VM — a deliberate, documented exception to "no resident daemon". |
-| D10 | Config filename | `bastion.yaml`, revisited only if D1 renames the project. |
+| D10 | Config filename | `bastion.yaml`. |
 
 Deltas from draft 0.1:
 
@@ -72,7 +72,7 @@ Deltas from draft 0.1:
 4. Idempotent host convergence: system packages, built-in and local features, managed files.
 5. Long-running services from OCI images via generated per-service Compose projects.
 6. Durable service data on a user-provided data disk path that survives VM stop/replace.
-7. Private-by-default networking: endpoints are container-internal unless declared `private`; nothing binds `0.0.0.0`.
+7. Private-by-default networking: endpoints are container-internal unless declared `private` or routed through the managed ingress proxy (§9.8); user services never bind `0.0.0.0`.
 8. Read-only planning before every consequential mutation; destructive actions separately confirmed.
 9. Machine-readable (`--json`) output alongside human output.
 
@@ -370,8 +370,10 @@ The runner is a bash program generated per request by the CLI and piped to
 - the **inspect** program is strictly read-only and emits observed facts as a
   `@f …` line protocol (base64 for opaque values);
 - the **apply** program executes the approved plan's steps in order, emitting
-  `@e <step> start|ok|fail` events and `@l` log lines; the first failure stops
-  the run after its event, leaving earlier successes and markers in place;
+  `@e <step> start|ok|fail` events and `@l` log lines; steps run under strict
+  shell semantics (`set -e -o pipefail`), so a marker is written only after
+  every command in its step succeeded, and the first failure stops the run
+  after its event, leaving earlier successes and markers in place;
 - nothing is persisted on the VM and nothing ever listens on a socket;
 - `sudo -n` is used only by steps that declare root; a missing sudo fails with
   remediation, never an interactive prompt;
@@ -382,12 +384,21 @@ The runner is a bash program generated per request by the CLI and piped to
 Version matching is inherent: the program *is* this CLI version. There is no
 protocol negotiation and nothing to upgrade on the box. A remote mkdir-based
 apply lock (stale after an hour, recoverable by `rmdir` alone) guards
-concurrent applies from different machines.
+concurrent applies from different machines; the runner releases it on any
+signal death the guest can observe, not only on clean exit.
+
+Interruption is advisory, not transactional: cancelling the CLI signals the
+whole transport process group, but over IAP the relay can hold the backend
+leg open, so the runner may finish outstanding work or die late. Safety
+comes from marker-last writes, the self-releasing lock, and lock refusals
+that report the holder's age and their own recovery.
 
 ### 8.2 Packages
 
-`host.packages` installs from apt, idempotently. Removing a name stops
-requiring the package; it never uninstalls. Unsupported guests are rejected
+`host.packages` installs from apt, idempotently and non-interactively;
+every apt invocation waits out dpkg locks held by cloud-init or
+unattended-upgrades instead of failing a freshly booted box. Removing a name
+stops requiring the package; it never uninstalls. Unsupported guests are rejected
 before any mutation (D3).
 
 ### 8.3 Built-in features
@@ -578,7 +589,8 @@ for "start, inspect, don't apply"). `--detailed-exitcode`: `0` no changes, `2`
 changes proposed, `1` error.
 
 `apply` requires a running, reachable box, executes in dependency order,
-revalidates preconditions immediately before each consequential action, and is
+revalidates preconditions immediately before each consequential action,
+emits an elapsed-time heartbeat while a long action runs, and is
 resumable but not transactional: each success updates remote state atomically;
 a failure leaves earlier successes in place and prints the exact resume
 command. Individual resources (a file, a container, a generated config) change
@@ -605,7 +617,7 @@ are recoverable without deleting state directories.
 - Secrets: see §9.4 invariants.
 - Containers: see §9.6 defaults.
 - Attached cloud resources are never destroyed (§7.1).
-- Release artifacts ship with checksums and signatures (release blocker, with D1).
+- Release artifacts ship with checksums and keyless signatures (verification in SECURITY.md).
 
 ## 12. Testing
 
@@ -617,8 +629,8 @@ are recoverable without deleting state directories.
   reports; event streams.
 - **Integration**: fake provider + fake SSH executor for CLI flows; real
   Docker tests for the service engine (create/replace/logs/health/remove).
-  Real-GCP tests are manual in v1 (developer-run against a personal project);
-  automated GCP fixtures are a release-blocker item alongside D1.
+  Real-GCP tests are manual in v1 (developer-run against a personal
+  project); automated GCP fixtures are deferred.
 - **Compatibility**: macOS/Linux clients on amd64/arm64; config and runner
   version-match behavior across one prior version before any stable release.
 
@@ -626,7 +638,7 @@ are recoverable without deleting state directories.
 
 `bastion doctor` checks: gcloud presence and version; active account; project
 access; instance existence and state; SSH/IAP reachability; OS Login
-configuration; guest OS support; non-interactive sudo; data-root mount and free
+configuration; guest OS support; guest internet egress (probed against a non-Google host, so Private Google Access cannot mask a missing NAT); non-interactive sudo; data-root mount and free
 space; Docker/Compose health; runner version match; service health; and known
 unsafe configuration (agent forwarding, mutable tags). Failures come with
 remediation text. Every apply gets an operation ID; `--json` emits versioned
@@ -641,7 +653,7 @@ CI (fmt, vet, test, cross-compile).
 *Exit:* daily lifecycle driving of a real attached VM needs no other tool;
 a second `validate`/`status` run is stable; all argv construction is tested.
 
-**B — host convergence** *(implemented; validated end-to-end on a real GCE VM 2026-08-12)*:
+**B — host convergence** *(implemented; validated end-to-end on real GCE VMs)*:
 generated-runner inspect/apply + event protocol (Δ9); plan/apply engine with
 local flock + remote mkdir locks; packages; built-ins (docker, github-cli,
 tmux, build-essential via apt; mise, uv, bun, claude-code via official HTTPS
@@ -650,10 +662,9 @@ installers; codex via GitHub releases); local feature contract
 managed files (replace, first-touch backups); marker state (Δ10);
 resume-after-partial-failure.
 *Exit:* clean Ubuntu 24.04 VM converges to the example config; second apply is
-a no-op; an interrupted apply resumes safely. *(All proven live; resume drill
-2026-08-25.)*
+a no-op; an interrupted apply resumes safely. *(All proven live.)*
 
-**C — services** *(implemented; validated end-to-end on a real GCE VM 2026-08-12)*: deterministic
+**C — services** *(implemented; validated end-to-end on real GCE VMs)*: deterministic
 Compose generation with ownership labels and isolation defaults; engine-side
 dependency ordering + health gating (Δ13); service
 list/status/logs/start/stop/restart/exec/update; durable + ephemeral volumes;
@@ -665,86 +676,17 @@ confirmation.
 across a VM stop/start; a removed service is pruned without touching its
 durable volume; unlabeled containers are never touched. *(All proven live.)*
 
-Gaps from the 2026-08-12 real-VM validation — **all closed the same day**
-(fixes live-verified on a second disposable VM):
-
-1. ~~gcloud NumPy warning noise~~ — suppressed at the source with
-   `--verbosity=error` on every SSH-path invocation.
-2. ~~egress dead end undetectable~~ — doctor now probes outbound 443 from the
-   guest against a deliberately non-Google host, so Private Google Access
-   cannot mask a missing NAT/external IP.
-3. ~~no guest-level doctor checks~~ — one extra SSH round trip now reports
-   guest OS support, non-interactive sudo, internet egress, data-root
-   existence/free space, and Docker daemon health (noting docker-group
-   membership as effectively root).
-4. ~~apt lock race~~ — every apt invocation sets `DPkg::Lock::Timeout=120`.
-5. ~~silent long steps~~ — apply emits a 20-second elapsed-time heartbeat for
-   the running action.
-6. ~~template mode / update write-back / exec TTY~~ — `template` shipped
-   (Δ7); `service update --pin` writes the resolved digest back into the
-   definition (exactly-one-occurrence edit, validated, restored on failure);
-   `service exec --tty` allocates a PTY on both hops.
-7. doctor's SSH probe retries 3× over ~10 s so a just-booted box's OS Login
-   key propagation doesn't read as failure (found during fix verification).
-
-Interrupted-apply resume — exercised live 2026-08-25, gap closed. A real
-apply was SIGINT-killed 10 s into a mid-apt feature step, and the
-abandoned-lock state (lock directory held, step unmarked, payload partial)
-was driven through recovery. Verified live: completed steps keep their
-markers and drop out of the next plan; an interruption between a step's
-mutation and its marker write replans as "present but not yet managed";
-read-only plans run under a held lock; a concurrent apply is refused;
-`rmdir` alone recovers the lock; the resumed apply converges to a no-op.
-Two defects found by the drill, fixed same day:
-
-8. ~~false-success steps~~ — a step's status was its last command's, so a
-   failed installer pipe followed by the unconditional marker write reported
-   ok and recorded a marker for work that never happened. Steps now execute
-   under `set -e -o pipefail`, regression-tested by running the harness
-   under real bash.
-9. ~~bun unusable on stock guests~~ — bun's installer requires `unzip`,
-   which GCE Ubuntu 24.04 images do not ship; the failure was masked by
-   gap 8. The feature is now root and installs `unzip` first.
-
-Follow-ups from the drill, all landed and live-verified 2026-08-25:
-
-10. ~~orphaned transport~~ — cancellation now signals the transport's whole
-    process group (previously only gcloud, whose ssh child kept the
-    connection — and the remote run — alive and unmonitored), and the
-    runner releases the apply lock from HUP/INT/TERM/PIPE traps, not only
-    on clean exit. Interactive commands keep the old single-process signal:
-    they need the terminal's foreground group.
-11. ~~unnarrated interrupt~~ — an interrupted apply now says what is
-    recorded, what may be partial, that the runner can outlive the
-    connection, and prints the resume commands.
-12. ~~wait-only lock refusal~~ — a lock refusal reports the holder's age
-    and the exact `bastion exec … rmdir` recovery alongside the one-hour
-    takeover.
-13. additive cleanup (2026-08-25, from the same review): plans report
-    undeclared feature markers as orphan notes, and `feature remove` gives
-    user-level built-ins a safe inverse (§8.3). Apply stays strictly
-    additive.
-
-A constraint worth recording: over IAP, killing the local client does not
-promptly reach the guest — the relay holds the backend leg open, so sshd
-sees the disconnect late and the runner keeps executing meanwhile (observed
-live: a package install finished ~90 s after the local kill, then released
-the lock on clean exit). Interruption is therefore advisory, not
-transactional. The standing guarantees are marker-last writes, a
-serializing lock that self-releases on every death the guest can observe,
-and refusals that carry their own recovery.
-
-**D — public ingress** *(implemented 2026-08-26; §9.8)*: `ingress.baseDomain`
+**D — public ingress** *(implemented; validated live on a real domain; §9.8)*: `ingress.baseDomain`
 + `visibility: public` + required `auth` acknowledgement; generated
 Caddyfile/Compose with digest-labeled proxy container; per-host ACME (no
 DNS-provider API); hostname derivation and box-wide uniqueness; destructive
 proxy removal retaining certificate state; doctor checks for static IP,
 wildcard/custom DNS (flagging proxied records), and 80/443 reachability;
 `endpoint list` URLs.
-*Exit:* a real app (museletter) serves HTTPS on a subdomain of a
-user-configured base domain with a wildcard record created once; a second
-app needs only yaml; removing the last public endpoint removes the proxy and
-keeps certificates.
+*Exit:* a real application serves HTTPS on a subdomain of a user-configured
+base domain with a wildcard record created once; a second app needs only
+configuration; removing the last public endpoint removes the proxy and keeps
+certificates.
 
 **Deferred** (design intact in `docs/original-spec.md`): managed GCP
 infrastructure; ingress basic auth; Cloudflare Tunnel as an alternate

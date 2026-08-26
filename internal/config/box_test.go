@@ -473,7 +473,7 @@ func TestShellValidation(t *testing.T) {
 	wantIssue(t, validateDoc(t, minimalDoc+`
 host:
   shell:
-    prompt: "sanket's"
+    prompt: "alice's"
 `), "host.shell.prompt")
 	wantIssue(t, validateDoc(t, minimalDoc+`
 host:
@@ -482,7 +482,7 @@ host:
 	if issues := validateDoc(t, minimalDoc+`
 host:
   shell:
-    prompt: sanket
+    prompt: alice
 `); len(issues) != 0 {
 		t.Fatalf("valid prompt rejected: %v", issues)
 	}
