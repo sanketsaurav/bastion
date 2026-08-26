@@ -339,6 +339,25 @@ secrets:
 	wantIssue(t, issues, "exactly one")
 }
 
+func TestSecretFilePathValidation(t *testing.T) {
+	wantIssue(t, validateDoc(t, minimalDoc+`
+secrets:
+  token:
+    source:
+      file: secrets/token
+`), "absolute path or start with ~/")
+	for _, ok := range []string{"~/.secrets/token", "/etc/bastion/token"} {
+		if issues := validateDoc(t, minimalDoc+`
+secrets:
+  token:
+    source:
+      file: `+ok+`
+`); len(issues) != 0 {
+			t.Fatalf("%s rejected: %v", ok, issues)
+		}
+	}
+}
+
 func TestIngressValidation(t *testing.T) {
 	public := func(extra string) string {
 		return minimalDoc + `

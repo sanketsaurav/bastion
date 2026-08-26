@@ -241,6 +241,10 @@ func (v *validator) secrets(secrets map[string]Secret) {
 			v.addf("secrets.%s.source: set exactly one of environment or file", name)
 		case env && !envKeyRe.MatchString(s.Source.Environment):
 			v.addf("secrets.%s.source.environment: %q is not a valid environment variable name", name, s.Source.Environment)
+		case file && !strings.HasPrefix(s.Source.File, "/") && !strings.HasPrefix(s.Source.File, "~/"):
+			// A bare relative path would resolve against whatever directory
+			// bastion happens to run from — silently the wrong file.
+			v.addf("secrets.%s.source.file: %q must be an absolute path or start with ~/", name, s.Source.File)
 		}
 	}
 }
