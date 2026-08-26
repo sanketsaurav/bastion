@@ -108,7 +108,7 @@ type Host struct {
 // line in ~/.bashrc.
 type Shell struct {
 	// Prompt is the name PS1 shows in place of the login username
-	// (e.g. `sanket@valhalla` instead of `ext_..._gmail_com@valhalla`).
+	// (e.g. `alice@devbox` instead of `ext_..._gmail_com@devbox`).
 	// Cosmetic only: authentication and `whoami` are unchanged.
 	Prompt string `yaml:"prompt,omitempty" json:"prompt,omitempty"`
 }

@@ -44,19 +44,28 @@ explicit `auth` policy) is served at `https://<service>.<baseDomain>` through
 a bastion-managed Caddy proxy with automatic per-host certificates. Hosting
 the next mini app is a yaml change.
 
-## Getting started
-
-Requires Go 1.26+ to build and the [gcloud CLI](https://cloud.google.com/sdk)
-authenticated against your project.
+## Install
 
 ```console
-$ go build -o bastion ./cmd/bastion
+$ brew install sanketsaurav/tap/bastion
+```
 
-$ ./bastion init ~/boxes/mybox        # scaffold a definition
-$ $EDITOR ~/boxes/mybox/bastion.yaml  # point it at your VM
-$ ./bastion box adopt mybox --config ~/boxes/mybox
-$ ./bastion doctor                    # verify gcloud, auth, access, SSH
-$ ./bastion up
+Or `go install github.com/sanketsaurav/bastion/cmd/bastion@latest`, or grab a
+signed archive from the
+[releases page](https://github.com/sanketsaurav/bastion/releases)
+(verification instructions in [SECURITY.md](SECURITY.md)).
+
+## Getting started
+
+Requires the [gcloud CLI](https://cloud.google.com/sdk) authenticated against
+your project.
+
+```console
+$ bastion init ~/boxes/mybox         # scaffold a definition
+$ $EDITOR ~/boxes/mybox/bastion.yaml # point it at your VM
+$ bastion box adopt mybox --config ~/boxes/mybox
+$ bastion doctor                     # verify gcloud, auth, access, SSH
+$ bastion up
 ```
 
 A complete annotated definition lives in

@@ -1,0 +1,72 @@
+version: 2
+
+project_name: bastion
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/bastion
+    binary: bastion
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/sanketsaurav/bastion/internal/version.Version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+# Keyless (Sigstore) signature over the checksum file: verifiers check the
+# archive against checksums.txt, and checksums.txt against the signature +
+# certificate (SPEC.md §11: artifacts ship with checksums and signatures).
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - --yes
+      - --output-signature=${signature}
+      - --output-certificate=${certificate}
+      - ${artifact}
+    artifacts: checksum
+
+# Same installation path as museletter: the sanketsaurav/homebrew-tap repo,
+# committed by the release run via the HOMEBREW_TAP_TOKEN fine-grained PAT
+# (contents:write on the tap repo — the same secret museletter's workflow
+# uses; add it to this repo's Actions secrets before the first tag).
+# goreleaser ships CLI binaries as casks now; the post-install hook strips
+# Gatekeeper quarantine from the unsigned binary.
+homebrew_casks:
+  - repository:
+      owner: sanketsaurav
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/sanketsaurav/bastion
+    description: "Config-driven CLI for operating a personal dev box on GCE"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bastion"]
+          end
+
+changelog:
+  use: git
+  filters:
+    exclude:
+      - "^docs:"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
