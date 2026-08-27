@@ -11,6 +11,7 @@ dq() { docker "$@" 2>/dev/null || sudo -n docker "$@" 2>/dev/null; }
 if [ "$(dpkg-query -W -f='${db:Status-Status}' git 2>/dev/null)" = installed ]; then f pkg git installed; else f pkg git absent; fi
 if [ "$(dpkg-query -W -f='${db:Status-Status}' jq 2>/dev/null)" = installed ]; then f pkg jq installed; else f pkg jq absent; fi
 if grep -Fq '# bastion:shell-integration' "$HOME/.bashrc" 2>/dev/null; then f shline present; else f shline absent; fi
+if e=$(getent passwd dev); then f ualias "$(printf %s "$e" | cut -d: -f3)" "$(id -u)"; else f ualias absent "$(id -u)"; fi
 t="$HOME"/.tmux.conf
 if [ -e "$t" ]; then
   if [ -r "$t" ]; then sha=$(sha256sum <"$t" | cut -d' ' -f1); else sha=unreadable; fi

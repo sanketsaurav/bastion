@@ -127,6 +127,11 @@ type Shell struct {
 	// Banner controls the nameplate `bastion ssh` prints before the
 	// session: "art" (the default) or "off".
 	Banner string `yaml:"banner,omitempty" json:"banner,omitempty" jsonschema:"enum=art,enum=off"`
+	// UserAlias additionally creates a local passwd entry named after
+	// prompt with the login user's uid, gid, and home — so `whoami`,
+	// PS1's \u, and file listings show the prompt name. The login name,
+	// authentication, and home directory are unchanged. Requires prompt.
+	UserAlias bool `yaml:"userAlias,omitempty" json:"userAlias,omitempty"`
 }
 
 type Feature struct {

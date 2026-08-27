@@ -18,6 +18,9 @@ var (
 	// Prompt aliases end up inside a single-quoted PS1 assignment; the
 	// charset forbids quotes, backslashes, and whitespace by construction.
 	promptRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$`)
+	// userAlias creates a real passwd entry, so the prompt must then also
+	// be a valid unix username.
+	unixNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 )
 
 // ValidateBox returns every semantic issue in a normalized Box. dir is the box
@@ -157,6 +160,14 @@ func (v *validator) host(h *Host) {
 		case "", "art", "off":
 		default:
 			v.addf("host.shell.banner: must be \"art\" or \"off\", got %q", s.Banner)
+		}
+		if s.UserAlias {
+			switch {
+			case s.Prompt == "":
+				v.addf("host.shell.userAlias needs a prompt to alias")
+			case !unixNameRe.MatchString(s.Prompt):
+				v.addf("host.shell.userAlias: prompt %q must be a valid unix username (lowercase letters, digits, - _; 32 chars max)", s.Prompt)
+			}
 		}
 	}
 }

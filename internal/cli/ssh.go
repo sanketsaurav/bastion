@@ -61,15 +61,18 @@ func (a *App) printBanner(res *registry.Resolution) {
 	fmt.Fprintln(a.stderr)
 	for _, row := range banner.Art(name) {
 		if u.color {
-			fmt.Fprintf(a.stderr, "  %s%s%s\n", accent, row, ansiReset)
+			fmt.Fprintf(a.stderr, "%s%s%s\n", accent, row, ansiReset)
 		} else {
-			fmt.Fprintf(a.stderr, "  %s\n", row)
+			fmt.Fprintln(a.stderr, row)
 		}
 	}
-	fmt.Fprintf(a.stderr, "\n  %s\n", u.paint(ansiDim,
-		fmt.Sprintf("%s/%s · %s", box.Provider.Project, box.Provider.Zone, box.Provider.Instance)))
-	for _, pe := range box.PublicEndpoints() {
-		fmt.Fprintf(a.stderr, "  %s\n", u.paint(ansiDim, "https://"+pe.Hostname))
+	fmt.Fprintf(a.stderr, "\n%s\n", u.paint(ansiDim,
+		fmt.Sprintf("☁ %s  ⌖ %s  ⌂ %s", box.Provider.Project, box.Provider.Zone, box.Provider.Instance)))
+	if pubs := box.PublicEndpoints(); len(pubs) > 0 {
+		fmt.Fprintf(a.stderr, "\n%s\n", u.paint(ansiDim, "apps"))
+		for _, pe := range pubs {
+			fmt.Fprintf(a.stderr, "%s https://%s\n", u.paint(ansiDim, "  ↳"), pe.Hostname)
+		}
 	}
 	fmt.Fprintln(a.stderr)
 }

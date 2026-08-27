@@ -50,9 +50,9 @@ var glyphs = map[rune][5]string{
 	'-': {"...", "...", "XXX", "...", "..."},
 }
 
-// Art renders name as three rows of half-block art. Runes outside the font
-// are skipped; an empty result yields three empty rows.
-func Art(name string) [3]string {
+// pixelRows lays name out on the 5-row pixel grid with one column of
+// spacing between glyphs. Runes outside the font are skipped.
+func pixelRows(name string) [5]string {
 	var pixels [5]strings.Builder
 	first := true
 	for _, r := range name {
@@ -68,7 +68,14 @@ func Art(name string) [3]string {
 		}
 		first = false
 	}
+	var out [5]string
+	for i := range out {
+		out[i] = pixels[i].String()
+	}
+	return out
+}
 
+func halfBlocks(rows [5]string, stretch int) [3]string {
 	cell := func(top, bottom byte) rune {
 		switch {
 		case top == 'X' && bottom == 'X':
@@ -81,16 +88,42 @@ func Art(name string) [3]string {
 		return ' '
 	}
 	var out [3]string
-	width := pixels[0].Len()
-	rows := [5]string{pixels[0].String(), pixels[1].String(), pixels[2].String(), pixels[3].String(), pixels[4].String()}
 	for i, pair := range [3][2]int{{0, 1}, {2, 3}, {4, -1}} {
 		var b strings.Builder
-		for col := 0; col < width; col++ {
+		for col := 0; col < len(rows[0]); col++ {
 			bottom := byte('.')
 			if pair[1] >= 0 {
 				bottom = rows[pair[1]][col]
 			}
-			b.WriteRune(cell(rows[pair[0]][col], bottom))
+			for s := 0; s < stretch; s++ {
+				b.WriteRune(cell(rows[pair[0]][col], bottom))
+			}
+		}
+		out[i] = strings.TrimRight(b.String(), " ")
+	}
+	return out
+}
+
+// Art renders name as three rows of half-block art.
+func Art(name string) [3]string { return halfBlocks(pixelRows(name), 1) }
+
+// ArtWide doubles every pixel column: terminal cells are roughly twice as
+// tall as wide, so this yields square pixels and a bolder plate.
+func ArtWide(name string) [3]string { return halfBlocks(pixelRows(name), 2) }
+
+// ArtBig renders every pixel row as its own text row of full blocks, two
+// columns per pixel — the poster size.
+func ArtBig(name string) [5]string {
+	rows := pixelRows(name)
+	var out [5]string
+	for i, row := range rows {
+		var b strings.Builder
+		for col := 0; col < len(row); col++ {
+			if row[col] == 'X' {
+				b.WriteString("██")
+			} else {
+				b.WriteString("  ")
+			}
 		}
 		out[i] = strings.TrimRight(b.String(), " ")
 	}

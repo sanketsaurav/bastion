@@ -34,6 +34,12 @@ type Facts struct {
 	// shell-integration source line (observed only when host.shell is set).
 	ShellLine bool
 
+	// UserAliasUID is the uid of the local passwd entry named after the
+	// prompt ("" = no entry); LoginUID is the connecting user's uid. Both
+	// observed only when host.shell.userAlias is set.
+	UserAliasUID string
+	LoginUID     string
+
 	// Ingress is the bastion-managed reverse-proxy container, when present.
 	Ingress ServiceFact
 
@@ -279,6 +285,13 @@ func (f *Facts) absorb(p []string) error {
 		}
 	case "shline":
 		f.ShellLine = len(p) >= 2 && p[1] == "present"
+	case "ualias":
+		if len(p) >= 3 {
+			if p[1] != "absent" {
+				f.UserAliasUID = p[1]
+			}
+			f.LoginUID = p[2]
+		}
 	case "ingx":
 		if len(p) >= 2 {
 			f.Ingress.Exists = p[1] == "present"

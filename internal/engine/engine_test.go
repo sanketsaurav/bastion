@@ -39,6 +39,7 @@ host:
   shell:
     prompt: dev
     motd: quiet
+    userAlias: true
 volumes:
   data:
     persistence: durable

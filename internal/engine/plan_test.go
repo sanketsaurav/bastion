@@ -22,6 +22,7 @@ func freshFactLines() []string {
 		"@f feat docker absent",
 		"@f feat tmux absent",
 		"@f lcheck mytool needs",
+		"@f ualias absent 1000",
 		"@f docker absent",
 		"@f network absent",
 		"@f svc db absent",
@@ -65,6 +66,7 @@ func TestPlanFreshBox(t *testing.T) {
 		"file:~/.tmux.conf",
 		"file:~/.config/bastion/shell.sh",
 		"shell-line",
+		"user-alias",
 		"file:~/.hushlogin",
 		"network",
 		"volume:data",
@@ -122,6 +124,7 @@ func convergedFactLines(t *testing.T, in *Input) []string {
 		"@f file " + b64s(HushloginTarget) + " present " + hushSHA + " 644",
 		"@f bak " + b64s(HushloginTarget) + " absent",
 		"@f shline present",
+		"@f ualias 1000 1000",
 		"@f feat docker " + b64s("Docker version 27.0.0"),
 		"@f feat tmux " + b64s("tmux 3.4"),
 		"@f lcheck mytool ok",
@@ -174,6 +177,22 @@ func TestPlanRotateSecrets(t *testing.T) {
 				t.Errorf("rotation must force-recreate with its reason, got %+v", act.Summary)
 			}
 		}
+	}
+}
+
+// A prompt name that already belongs to a different local user must stop
+// the plan — aliasing it would hand its identity to someone else's uid.
+func TestPlanUserAliasCollision(t *testing.T) {
+	in := fixtureInput(t)
+	lines := convergedFactLines(t, in)
+	for i, l := range lines {
+		if strings.HasPrefix(l, "@f ualias ") {
+			lines[i] = "@f ualias 4242 1000"
+		}
+	}
+	_, err := BuildPlan(in, mustParseFacts(t, lines))
+	if err == nil || !strings.Contains(err.Error(), "different user") {
+		t.Fatalf("expected a collision error, got: %v", err)
 	}
 }
 

@@ -39,6 +39,10 @@ if sudo -n true 2>/dev/null; then f sudo ok; else f sudo missing; fi
 			if sh.MOTD == "quiet" {
 				extra = append(extra, config.ManagedFile{Target: HushloginTarget})
 			}
+			if sh.UserAlias {
+				w.linef(`if e=$(getent passwd %s); then f ualias "$(printf %%s "$e" | cut -d: -f3)" "$(id -u)"; else f ualias absent "$(id -u)"; fi`,
+					q(sh.Prompt))
+			}
 			files = append(files[:len(files):len(files)], extra...)
 		}
 		for _, mf := range files {

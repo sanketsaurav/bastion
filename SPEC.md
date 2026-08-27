@@ -213,6 +213,7 @@ host:                               # (B)
                                     # OS Login username; cosmetic only
     motd: quiet                     # default | quiet (writes ~/.hushlogin)
     banner: art                     # art (default) | off — `bastion ssh` nameplate
+    userAlias: true                 # passwd alias: whoami reports the prompt name
 
 ingress:                            # (D) enables public endpoints (§9.8)
   baseDomain: apps.example.com      # default hostname: <service>.<baseDomain>
@@ -470,7 +471,17 @@ only: authentication, `whoami`, and home directory are unchanged.
 `host.shell.motd: quiet` writes an empty `~/.hushlogin` through the same
 pipeline, silencing the distribution's dynamic MOTD (news and ads included)
 and sshd's last-login line on every SSH path. Reverting to `default` stops
-managing the file but never deletes it. The `bastion ssh` nameplate is
+managing the file but never deletes it.
+
+`host.shell.userAlias: true` goes one step past the cosmetic prompt: it adds
+a local passwd entry named after the prompt with the login user's uid, gid,
+and home (`useradd -o`). Because the files NSS source answers uid lookups
+before the OS Login module, `whoami`, `\u`, and file listings then report
+the prompt name, while the OS Login name keeps owning authentication, sudo,
+and group membership. The alias has no keys and a locked password, so it
+cannot be logged into; a prompt that already names a different local user
+fails the plan. Like everything else, undeclaring stops managing the entry
+without deleting it. The `bastion ssh` nameplate is
 client-side: the box name in half-block art with an accent color derived
 from the name — every box looks distinct at a glance — plus the box's
 coordinates and public URLs, all from local configuration so the session

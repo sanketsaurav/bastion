@@ -153,6 +153,19 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 					})
 				}
 			}
+			if sh.UserAlias {
+				switch {
+				case facts.UserAliasUID == "":
+					actions = append(actions, Action{
+						ID: "user-alias", Kind: KindUserAlias, RequiresRoot: true,
+						Summary: fmt.Sprintf("create login alias %q (whoami will match the prompt)", sh.Prompt),
+						target:  sh.Prompt,
+					})
+				case facts.UserAliasUID != facts.LoginUID:
+					return nil, fmt.Errorf("host.shell.userAlias: %q already exists on the box as a different user (uid %s); pick another prompt",
+						sh.Prompt, facts.UserAliasUID)
+				}
+			}
 			if sh.MOTD == "quiet" {
 				if act := fileActionFromContent(facts, HushloginTarget, nil, "0644"); act != nil {
 					act.Summary = "write ~/.hushlogin (silence the login MOTD)"

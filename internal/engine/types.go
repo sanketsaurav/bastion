@@ -71,6 +71,7 @@ const (
 	KindLocalFeature  = "local-feature"
 	KindFile          = "file"
 	KindShellLine     = "shell-line"
+	KindUserAlias     = "user-alias"
 	KindNetwork       = "network"
 	KindIngress       = "ingress"
 	KindIngressRemove = "ingress-remove"

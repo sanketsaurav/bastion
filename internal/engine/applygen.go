@@ -69,6 +69,8 @@ func stepBody(in *Input, act *Action, opts ApplyOptions) (string, error) {
 		return fileBody(in, act.file), nil
 	case KindShellLine:
 		return shellLineBody(), nil
+	case KindUserAlias:
+		return userAliasBody(act.target), nil
 	case KindNetwork:
 		return fmt.Sprintf("dk network inspect %s >/dev/null 2>&1 || dk network create --label bastion.box-id=%s %s\n",
 			q(in.networkName()), q(in.BoxID), q(in.networkName())), nil
@@ -260,6 +262,21 @@ sudo -n rm -rf %s
 echo "ingress proxy removed; certificate state under %s is retained"
 `, q(in.ingressName()), q(in.ingressDir()+"/compose.yaml"), q(in.ingressName()),
 		q(in.ingressDir()), in.ingressDataDir())
+}
+
+// userAliasBody adds a passwd entry named after the prompt with the login
+// user's uid, gid, and home (SPEC.md §8.5): whoami, \u, and file listings
+// then show the alias, while the OS Login name keeps owning authentication.
+// The local files NSS source answers uid lookups before the oslogin module,
+// and the alias never gets keys or a password, so it cannot be logged into.
+func userAliasBody(name string) string {
+	return fmt.Sprintf(`if getent passwd %s >/dev/null; then
+  echo "login alias already present"
+else
+  sudo -n useradd -o -u "$(id -u)" -g "$(id -g)" -d "$HOME" -M -s /bin/bash %s
+  echo "login alias created; whoami now reports %s"
+fi
+`, q(name), q(name), name)
 }
 
 // shellLineBody appends the delimited shell-integration line to ~/.bashrc
