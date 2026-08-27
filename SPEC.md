@@ -61,6 +61,7 @@ Deltas from draft 0.1:
 | Δ11 | Private endpoints publish on an explicit **`vmPort`** (default: `containerPort`); effective VM ports must be unique across the box. | Deterministic from configuration alone — no port-allocation state to persist, recover, or drift. |
 | Δ12 | The box ID is **`metadata.name`** in attached mode. | Human-legible container labels, paths, and network names; uniqueness is already enforced by the registry. Managed mode can revisit with a generated suffix if needed. |
 | Δ13 | `dependsOn` ordering (and health gating) is enforced by the **apply engine**, not Compose. | Each service is an independent Compose project; cross-project `depends_on` does not exist. The engine sequences deploys and inserts health waits between dependencies. |
+| Δ14 | SSH connections are **multiplexed** via an OpenSSH control master: every connection carries `ControlMaster=auto` with a per-box socket under the state dir (`ControlPersist` 600 s), and an invocation that finds the master alive skips gcloud entirely and rides the live tunnel with plain ssh. | The ~4 s of gcloud startup + IAP tunnel + handshake is paid once per idle window instead of once per command; plan/apply shed several round trips. `connection.multiplex: false` opts out; agent forwarding disables it (a per-session agent grant must not ride a shared master); a dead leftover socket is removed and the next connection becomes the master; `bastion down` retires the master. |
 
 ## 3. Scope
 
@@ -182,6 +183,7 @@ connection:
   type: iap                         # iap (default) | direct
   osLogin: true                     # default true
   forwardSshAgent: false            # default false; also per-invocation flag
+  multiplex: true                   # default true; connection reuse (Δ14)
   # direct only:
   # host: dev.example.com
   # user: alice
@@ -352,6 +354,9 @@ Bastion doesn't flip it.
 - Forwarding: `compute ssh -- -N -L 127.0.0.1:<local>:127.0.0.1:<remote>` (Δ3).
 - `type: direct` uses the system `ssh` with the configured host, user, and
   identity file; same argv-quoting rules.
+- All of the above ride the shared connection master when one is alive
+  (Δ14); otherwise they carry the options that make this connection the
+  master.
 
 ### 7.3 Readiness and privilege
 

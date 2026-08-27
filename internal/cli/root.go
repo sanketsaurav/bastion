@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ import (
 	"github.com/sanketsaurav/bastion/internal/provider/gcp"
 	"github.com/sanketsaurav/bastion/internal/registry"
 	"github.com/sanketsaurav/bastion/internal/version"
+	"github.com/sanketsaurav/bastion/internal/xdg"
 )
 
 // App carries the process-level collaborators so commands stay testable.
@@ -150,5 +152,17 @@ func (a *App) resolveBox(positional []string) (*registry.Resolution, error) {
 
 // clientFor builds the provider client for a resolved box.
 func (a *App) clientFor(res *registry.Resolution) *gcp.Client {
-	return gcp.FromBox(res.Loaded.Box, a.runner)
+	c := gcp.FromBox(res.Loaded.Box, a.runner)
+	// Connection multiplexing (SPEC.md Δ14): the per-box control socket
+	// lives under the state dir. Any failure to prepare it just means the
+	// ordinary one-connection-per-command path.
+	if res.Loaded.Box.Connection.UseMultiplex() {
+		if stateDir, err := xdg.StateDir(); err == nil {
+			sock := filepath.Join(stateDir, "mux", res.Loaded.Box.Metadata.Name+".sock")
+			if os.MkdirAll(filepath.Dir(sock), 0o700) == nil {
+				c.SetMuxSocket(sock)
+			}
+		}
+	}
+	return c
 }

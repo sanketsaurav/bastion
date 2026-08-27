@@ -9,7 +9,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sanketsaurav/bastion/internal/config"
 	"github.com/sanketsaurav/bastion/internal/execx"
@@ -36,15 +39,31 @@ type Options struct {
 	Host         string
 	User         string
 	IdentityFile string
+
+	// MuxSocket enables SSH connection multiplexing (SPEC.md Δ14): every
+	// connection carries ControlMaster options so the first one leaves a
+	// persistent background master behind, and an invocation that finds
+	// that master alive skips gcloud entirely and opens a channel on the
+	// live tunnel. Empty disables multiplexing. Agent forwarding also
+	// disables it: a per-session agent grant must not ride a shared master.
+	MuxSocket string
 }
 
 // Client drives one attached VM.
 type Client struct {
 	opt Options
 	run execx.Runner
+
+	muxOnce sync.Once
+	muxFast bool
 }
 
 func New(opt Options, run execx.Runner) *Client { return &Client{opt: opt, run: run} }
+
+// SetMuxSocket enables connection multiplexing on this client. The CLI
+// computes the per-box socket path (the state dir plus the box ID);
+// providers never invent paths.
+func (c *Client) SetMuxSocket(path string) { c.opt.MuxSocket = path }
 
 // FromBox builds a client from a validated, normalized box definition.
 func FromBox(b *config.Box, run execx.Runner) *Client {
@@ -89,12 +108,81 @@ func (c *Client) lifecycle(ctx context.Context, verb string) error {
 	if res.ExitCode != 0 {
 		return fmt.Errorf("gcloud failed to %s instance %q: %s", verb, c.opt.Instance, stderrSummary(res))
 	}
+	if verb == "stop" {
+		c.retireMux(ctx)
+	}
 	return nil
+}
+
+// retireMux asks a lingering connection master to exit after the instance
+// stopped — the tunnel is dead anyway; this just cleans up promptly.
+// Best-effort: a missing master is the common case.
+func (c *Client) retireMux(ctx context.Context) {
+	if !c.muxEnabled() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	c.run.Run(ctx, []string{"ssh", "-O", "exit", "-o", "ControlPath=" + c.opt.MuxSocket, muxHost})
+	os.Remove(c.opt.MuxSocket)
 }
 
 func (c *Client) Start(ctx context.Context) error  { return c.lifecycle(ctx, "start") }
 func (c *Client) Stop(ctx context.Context) error   { return c.lifecycle(ctx, "stop") }
 func (c *Client) Resume(ctx context.Context) error { return c.lifecycle(ctx, "resume") }
+
+// muxPersistSeconds is how long a connection master outlives its last
+// session; muxHost is the placeholder ssh target for multiplexed
+// invocations — with a live control socket, ssh never resolves it.
+const (
+	muxPersistSeconds = "600"
+	muxHost           = "bastion-mux"
+)
+
+func (c *Client) muxEnabled() bool {
+	return c.opt.MuxSocket != "" && !c.opt.ForwardAgent
+}
+
+// muxOptions create or join the shared master on the ordinary (gcloud or
+// direct) path.
+func (c *Client) muxOptions() []string {
+	return []string{
+		"-o", "ControlMaster=auto",
+		"-o", "ControlPath=" + c.opt.MuxSocket,
+		"-o", "ControlPersist=" + muxPersistSeconds,
+	}
+}
+
+// useFast reports whether a live master exists, probing at most once per
+// Client (one CLI invocation). A leftover socket with no master behind it is
+// removed so the next connection can become the master.
+func (c *Client) useFast() bool {
+	if !c.muxEnabled() || c.run == nil {
+		return false
+	}
+	c.muxOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		res, err := c.run.Run(ctx, []string{"ssh", "-O", "check", "-o", "ControlPath=" + c.opt.MuxSocket, muxHost})
+		if err == nil && res.ExitCode == 0 {
+			c.muxFast = true
+			return
+		}
+		if _, statErr := os.Stat(c.opt.MuxSocket); statErr == nil {
+			os.Remove(c.opt.MuxSocket)
+		}
+	})
+	return c.muxFast
+}
+
+// fastArgv rides the live master with plain ssh: options, placeholder
+// target, then the remote command.
+func (c *Client) fastArgv(opts []string, command ...string) []string {
+	argv := []string{"ssh", "-o", "ControlPath=" + c.opt.MuxSocket}
+	argv = append(argv, opts...)
+	argv = append(argv, muxHost)
+	return append(argv, command...)
+}
 
 // sshBase returns the transport-appropriate argv prefix for reaching the box.
 // For direct transport the final element is the ssh target.
@@ -124,8 +212,15 @@ func (c *Client) sshBase() []string {
 }
 
 // withSSHArgs appends options destined for the underlying ssh binary: after
-// "--" for gcloud, before the target for plain ssh.
+// "--" for gcloud, before the target for plain ssh. With a live mux master
+// the whole invocation collapses to plain ssh on the control socket.
 func (c *Client) withSSHArgs(sshArgs []string) []string {
+	if c.useFast() {
+		return c.fastArgv(sshArgs)
+	}
+	if c.muxEnabled() {
+		sshArgs = append(c.muxOptions(), sshArgs...)
+	}
 	base := c.sshBase()
 	if len(sshArgs) == 0 {
 		return base
@@ -158,10 +253,18 @@ func (c *Client) ExecArgv(remote []string, shell bool) []string {
 	if shell {
 		cmd = strings.Join(remote, " ")
 	}
-	if c.opt.Transport == TransportDirect {
-		return append(c.sshBase(), cmd)
+	if c.useFast() {
+		return c.fastArgv(nil, cmd)
 	}
-	return append(c.sshBase(), "--command", cmd)
+	if c.opt.Transport == TransportDirect {
+		return append(c.withSSHArgs(nil), cmd)
+	}
+	argv := append(c.sshBase(), "--command", cmd)
+	if c.muxEnabled() {
+		argv = append(argv, "--")
+		argv = append(argv, c.muxOptions()...)
+	}
+	return argv
 }
 
 // ExecArgvTTY is ExecArgv with a forced pseudo-terminal on the remote side —
@@ -171,13 +274,17 @@ func (c *Client) ExecArgvTTY(remote []string, shell bool) []string {
 	if shell {
 		cmd = strings.Join(remote, " ")
 	}
-	if c.opt.Transport == TransportDirect {
-		base := c.sshBase()
-		target := base[len(base)-1]
-		out := append(base[:len(base)-1:len(base)-1], "-t", target)
-		return append(out, cmd)
+	if c.useFast() {
+		return c.fastArgv([]string{"-t"}, cmd)
 	}
-	return append(c.sshBase(), "--command", cmd, "--", "-t")
+	if c.opt.Transport == TransportDirect {
+		return append(c.withSSHArgs([]string{"-t"}), cmd)
+	}
+	argv := append(c.sshBase(), "--command", cmd, "--", "-t")
+	if c.muxEnabled() {
+		argv = append(argv, c.muxOptions()...)
+	}
+	return argv
 }
 
 // TunnelArgv builds a loopback-to-loopback ssh -L forward. Private endpoints

@@ -71,6 +71,10 @@ type Connection struct {
 	Type            string `yaml:"type,omitempty" json:"type,omitempty" jsonschema:"enum=iap,enum=direct"`
 	OSLogin         *bool  `yaml:"osLogin,omitempty" json:"osLogin,omitempty"`
 	ForwardSSHAgent bool   `yaml:"forwardSshAgent,omitempty" json:"forwardSshAgent,omitempty"`
+	// Multiplex reuses one SSH connection across invocations via an
+	// OpenSSH control master (SPEC.md Δ14). Default true; agent
+	// forwarding disables it regardless.
+	Multiplex *bool `yaml:"multiplex,omitempty" json:"multiplex,omitempty"`
 
 	// Direct connections only.
 	Host         string `yaml:"host,omitempty" json:"host,omitempty"`
@@ -80,6 +84,9 @@ type Connection struct {
 
 // UseOSLogin reports the effective osLogin setting (default true).
 func (c *Connection) UseOSLogin() bool { return c.OSLogin == nil || *c.OSLogin }
+
+// UseMultiplex reports the effective multiplex setting (default true).
+func (c *Connection) UseMultiplex() bool { return c.Multiplex == nil || *c.Multiplex }
 
 type Runtime struct {
 	Engine      string       `yaml:"engine,omitempty" json:"engine,omitempty" jsonschema:"enum=docker"`

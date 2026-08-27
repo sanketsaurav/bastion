@@ -170,7 +170,9 @@ requires a confirmation naming the volume.
 ## How it works
 
 bastion talks to GCP exclusively through your installed `gcloud` (your auth,
-your IAP tunnels) and to the guest over SSH. For each plan or apply it
+your IAP tunnels) and to the guest over SSH — multiplexed, so the first
+connection pays the tunnel setup and every command in the next ten minutes
+rides it near-instantly. For each plan or apply it
 generates a bash program, pipes it to the VM, and reads back a structured
 event stream — nothing is installed or left running on the box, and every
 mutation is recorded in per-resource marker files so partial failures resume
