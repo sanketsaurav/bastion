@@ -67,7 +67,7 @@ func (a *App) printBanner(res *registry.Resolution) {
 		}
 	}
 	fmt.Fprintf(a.stderr, "\n%s\n", u.paint(ansiDim,
-		fmt.Sprintf("☁ %s  ⌖ %s  ⌂ %s", box.Provider.Project, box.Provider.Zone, box.Provider.Instance)))
+		fmt.Sprintf("◆ %s  ◉ %s", box.Provider.Project, box.Provider.Zone)))
 	if pubs := box.PublicEndpoints(); len(pubs) > 0 {
 		fmt.Fprintf(a.stderr, "\n%s\n", u.paint(ansiDim, "apps"))
 		for _, pe := range pubs {
