@@ -269,14 +269,23 @@ echo "ingress proxy removed; certificate state under %s is retained"
 // then show the alias, while the OS Login name keeps owning authentication.
 // The local files NSS source answers uid lookups before the oslogin module,
 // and the alias never gets keys or a password, so it cannot be logged into.
+//
+// The sudoers drop-in is not optional and must come first: sudo resolves
+// the invoking user via getpwuid — the alias name — while OS Login's
+// passwordless grant is keyed to the login name, so without an explicit
+// grant the alias silences sudo for the whole box (observed the hard way).
+// Same uid, same human: the grant widens nothing. Writing it before
+// useradd means the step can never lock itself out midway.
 func userAliasBody(name string) string {
-	return fmt.Sprintf(`if getent passwd %s >/dev/null; then
+	return fmt.Sprintf(`printf '%%s ALL=(ALL:ALL) NOPASSWD:ALL\n' %s | sudo -n tee %s >/dev/null
+sudo -n chmod 0440 %s
+if getent passwd %s >/dev/null; then
   echo "login alias already present"
 else
   sudo -n useradd -o -u "$(id -u)" -g "$(id -g)" -d "$HOME" -M -s /bin/bash %s
   echo "login alias created; whoami now reports %s"
 fi
-`, q(name), q(name), name)
+`, q(name), q(aliasSudoersPath), q(aliasSudoersPath), q(name), q(name), name)
 }
 
 // shellLineBody appends the delimited shell-integration line to ~/.bashrc

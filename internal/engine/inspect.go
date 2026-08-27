@@ -40,8 +40,13 @@ if sudo -n true 2>/dev/null; then f sudo ok; else f sudo missing; fi
 				extra = append(extra, config.ManagedFile{Target: HushloginTarget})
 			}
 			if sh.UserAlias {
-				w.linef(`if e=$(getent passwd %s); then f ualias "$(printf %%s "$e" | cut -d: -f3)" "$(id -u)"; else f ualias absent "$(id -u)"; fi`,
-					q(sh.Prompt))
+				// The grant check needs sudo (the sudoers dir is not
+				// user-statable), and that circularity is the right
+				// signal: a broken grant reads as missing and replans
+				// the step that repairs it.
+				w.linef(`sg=missing; sudo -n test -f %s 2>/dev/null && sg=granted
+if e=$(getent passwd %s); then f ualias "$(printf %%s "$e" | cut -d: -f3)" "$(id -u)" "$sg"; else f ualias absent "$(id -u)" "$sg"; fi`,
+					q(aliasSudoersPath), q(sh.Prompt))
 			}
 			files = append(files[:len(files):len(files)], extra...)
 		}

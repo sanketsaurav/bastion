@@ -154,16 +154,20 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 				}
 			}
 			if sh.UserAlias {
-				switch {
-				case facts.UserAliasUID == "":
-					actions = append(actions, Action{
-						ID: "user-alias", Kind: KindUserAlias, RequiresRoot: true,
-						Summary: fmt.Sprintf("create login alias %q (whoami will match the prompt)", sh.Prompt),
-						target:  sh.Prompt,
-					})
-				case facts.UserAliasUID != facts.LoginUID:
+				if facts.UserAliasUID != "" && facts.UserAliasUID != facts.LoginUID {
 					return nil, fmt.Errorf("host.shell.userAlias: %q already exists on the box as a different user (uid %s); pick another prompt",
 						sh.Prompt, facts.UserAliasUID)
+				}
+				if facts.UserAliasUID == "" || !facts.UserAliasSudoers {
+					summary := fmt.Sprintf("create login alias %q (whoami will match the prompt)", sh.Prompt)
+					if facts.UserAliasUID != "" {
+						summary = fmt.Sprintf("restore the sudo grant for login alias %q", sh.Prompt)
+					}
+					actions = append(actions, Action{
+						ID: "user-alias", Kind: KindUserAlias, RequiresRoot: true,
+						Summary: summary,
+						target:  sh.Prompt,
+					})
 				}
 			}
 			if sh.MOTD == "quiet" {

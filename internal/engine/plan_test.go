@@ -22,7 +22,7 @@ func freshFactLines() []string {
 		"@f feat docker absent",
 		"@f feat tmux absent",
 		"@f lcheck mytool needs",
-		"@f ualias absent 1000",
+		"@f ualias absent 1000 missing",
 		"@f docker absent",
 		"@f network absent",
 		"@f svc db absent",
@@ -124,7 +124,7 @@ func convergedFactLines(t *testing.T, in *Input) []string {
 		"@f file " + b64s(HushloginTarget) + " present " + hushSHA + " 644",
 		"@f bak " + b64s(HushloginTarget) + " absent",
 		"@f shline present",
-		"@f ualias 1000 1000",
+		"@f ualias 1000 1000 granted",
 		"@f feat docker " + b64s("Docker version 27.0.0"),
 		"@f feat tmux " + b64s("tmux 3.4"),
 		"@f lcheck mytool ok",
@@ -187,12 +187,37 @@ func TestPlanUserAliasCollision(t *testing.T) {
 	lines := convergedFactLines(t, in)
 	for i, l := range lines {
 		if strings.HasPrefix(l, "@f ualias ") {
-			lines[i] = "@f ualias 4242 1000"
+			lines[i] = "@f ualias 4242 1000 granted"
 		}
 	}
 	_, err := BuildPlan(in, mustParseFacts(t, lines))
 	if err == nil || !strings.Contains(err.Error(), "different user") {
 		t.Fatalf("expected a collision error, got: %v", err)
+	}
+}
+
+// The alias without its sudo grant silences sudo for the whole box — a
+// missing drop-in is drift, not decoration.
+func TestPlanUserAliasSudoersDrift(t *testing.T) {
+	in := fixtureInput(t)
+	lines := convergedFactLines(t, in)
+	for i, l := range lines {
+		if strings.HasPrefix(l, "@f ualias ") {
+			lines[i] = "@f ualias 1000 1000 missing"
+		}
+	}
+	plan, err := BuildPlan(in, mustParseFacts(t, lines))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, act := range plan.Actions {
+		if act.Kind == KindUserAlias && strings.Contains(act.Summary, "restore the sudo grant") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing sudoers drop-in must replan, got %v", actionIDs(plan))
 	}
 }
 

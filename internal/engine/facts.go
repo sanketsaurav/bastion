@@ -35,10 +35,12 @@ type Facts struct {
 	ShellLine bool
 
 	// UserAliasUID is the uid of the local passwd entry named after the
-	// prompt ("" = no entry); LoginUID is the connecting user's uid. Both
-	// observed only when host.shell.userAlias is set.
-	UserAliasUID string
-	LoginUID     string
+	// prompt ("" = no entry); LoginUID is the connecting user's uid;
+	// UserAliasSudoers reports the alias's sudo grant. All observed only
+	// when host.shell.userAlias is set.
+	UserAliasUID     string
+	LoginUID         string
+	UserAliasSudoers bool
 
 	// Ingress is the bastion-managed reverse-proxy container, when present.
 	Ingress ServiceFact
@@ -291,6 +293,7 @@ func (f *Facts) absorb(p []string) error {
 				f.UserAliasUID = p[1]
 			}
 			f.LoginUID = p[2]
+			f.UserAliasSudoers = len(p) >= 4 && p[3] == "granted"
 		}
 	case "ingx":
 		if len(p) >= 2 {

@@ -12,6 +12,11 @@ const ShellTarget = "~/.config/bastion/shell.sh"
 // Its existence is the mechanism; the content stays empty.
 const HushloginTarget = "~/.hushlogin"
 
+// aliasSudoersPath grants the login alias the same passwordless sudo the
+// login user already holds — sudo resolves users by uid via the alias name,
+// so the OS Login grant alone no longer matches (see userAliasBody).
+const aliasSudoersPath = "/etc/sudoers.d/bastion-user-alias"
+
 // shellLineMarker is the delimiter that makes the .bashrc line findable and
 // the append idempotent.
 const shellLineMarker = "# bastion:shell-integration"

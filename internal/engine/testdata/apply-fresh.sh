@@ -101,6 +101,8 @@ s7() {
 }
 run a7 s7
 s8() {
+  printf '%s ALL=(ALL:ALL) NOPASSWD:ALL\n' dev | sudo -n tee /etc/sudoers.d/bastion-user-alias >/dev/null
+  sudo -n chmod 0440 /etc/sudoers.d/bastion-user-alias
   if getent passwd dev >/dev/null; then
     echo "login alias already present"
   else
