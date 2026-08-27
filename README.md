@@ -17,6 +17,7 @@ $ bastion plan dev            # what would apply change? (read-only)
 $ bastion apply dev           # packages, tools, dotfiles, services
 $ bastion port dev metrics:web        # private endpoint → localhost tunnel
 $ bastion service logs dev blog -f    # tail a service
+$ bastion ssh-config dev --install    # reach the box from any SSH tool (IDEs, scp, rsync)
 $ bastion down dev            # stop compute; disks and data stay
 ```
 

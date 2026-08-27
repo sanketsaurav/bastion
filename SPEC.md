@@ -307,6 +307,7 @@ bastion status [box]                   Provider + instance state
 bastion up [box]                       Start if stopped; wait for SSH readiness
 bastion down [box]                     Stop compute; data is retained
 bastion ssh [box] [-- ssh-args]        Interactive SSH (IAP by default)
+bastion ssh-config [box]               Print a ~/.ssh/config Host block (--install/--remove manage it)
 bastion exec [box] -- <cmd> [args...]  Argv forwarded verbatim; --shell opts into shell
 bastion port [box] <remote-port> [--local-port N]   Loopback ssh -L forward
 bastion doctor [box]                   Environment and connectivity diagnosis
@@ -367,6 +368,20 @@ or a deadline passes (default 180 s). Convergence requires non-interactive
 the step and the remediation instead of hanging on a hidden prompt. Features
 that don't need root run without it. SSH agent forwarding defaults off and
 requires explicit config or a flag.
+
+### 7.4 Standard-tool access
+
+`bastion ssh-config [box]` renders a `~/.ssh/config` Host block that gives
+every ordinary SSH client — IDE remotes, scp, rsync — the same transport
+bastion uses: the OS Login username (resolved from the profile, never the
+whoami alias), gcloud's key and known-hosts files, an IAP `ProxyCommand`,
+and the shared connection-master socket (Δ14), so external sessions and
+bastion commands multiplex each other's tunnels. `--install` writes the
+block into `~/.ssh/config` between `# bastion:<box>` markers and replaces
+it as a unit — nothing outside the markers is ever touched, a block whose
+end marker is missing is refused rather than guessed at, and `--remove`
+deletes it. Direct-transport boxes render their host, user, and identity
+file instead.
 
 ## 8. Host convergence (milestone B)
 

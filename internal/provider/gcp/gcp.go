@@ -295,6 +295,45 @@ func (c *Client) TunnelArgv(localPort, remotePort int) []string {
 	return c.withSSHArgs([]string{"-N", "-o", "ExitOnForwardFailure=yes", "-L", forward})
 }
 
+// OSLoginUser resolves the POSIX username OS Login assigns this account —
+// the name SSH must authenticate as (never the whoami alias, SPEC.md §8.5).
+func (c *Client) OSLoginUser(ctx context.Context) (string, error) {
+	res, err := c.run.Run(ctx, []string{"gcloud", "compute", "os-login", "describe-profile",
+		"--project", c.opt.Project, "--format", "json"})
+	if err != nil {
+		return "", err
+	}
+	if res.ExitCode != 0 {
+		return "", fmt.Errorf("gcloud could not describe the OS Login profile: %s", stderrSummary(res))
+	}
+	var profile struct {
+		PosixAccounts []struct {
+			Primary  bool   `json:"primary"`
+			Username string `json:"username"`
+		} `json:"posixAccounts"`
+	}
+	if err := json.Unmarshal(res.Stdout, &profile); err != nil {
+		return "", fmt.Errorf("parsing OS Login profile: %w", err)
+	}
+	for _, acct := range profile.PosixAccounts {
+		if acct.Primary && acct.Username != "" {
+			return acct.Username, nil
+		}
+	}
+	for _, acct := range profile.PosixAccounts {
+		if acct.Username != "" {
+			return acct.Username, nil
+		}
+	}
+	return "", fmt.Errorf("the OS Login profile has no POSIX account; connect once with `bastion ssh` to create one")
+}
+
+// Instance reports the configured instance name (for callers composing
+// gcloud invocations of their own, e.g. ssh-config generation).
+func (c *Client) Instance() (project, zone, instance string) {
+	return c.opt.Project, c.opt.Zone, c.opt.Instance
+}
+
 // CheckSSH probes remote reachability with a trivial command.
 func (c *Client) CheckSSH(ctx context.Context) error {
 	res, err := c.run.Run(ctx, c.ExecArgv([]string{"true"}, false))

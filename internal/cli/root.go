@@ -112,6 +112,7 @@ func (a *App) Root() *cobra.Command {
 		a.upCmd(),
 		a.downCmd(),
 		a.sshCmd(),
+		a.sshConfigCmd(),
 		a.execCmd(),
 		a.portCmd(),
 		a.serviceCmd(),
