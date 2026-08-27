@@ -27,11 +27,19 @@ if sudo -n true 2>/dev/null; then f sudo ok; else f sudo missing; fi
 				q(pkg), q(pkg), q(pkg))
 		}
 		files := box.Host.Files
-		if box.Host.Shell != nil {
-			// The generated shell.sh flows through the same file facts.
-			files = append(files[:len(files):len(files)], config.ManagedFile{Target: ShellTarget})
-			w.linef(`if grep -Fq %s "$HOME/.bashrc" 2>/dev/null; then f shline present; else f shline absent; fi`,
-				q(shellLineMarker))
+		if sh := box.Host.Shell; sh != nil {
+			// Generated files (shell.sh, .hushlogin) flow through the same
+			// file facts as definition-supplied ones.
+			var extra []config.ManagedFile
+			if sh.Prompt != "" {
+				extra = append(extra, config.ManagedFile{Target: ShellTarget})
+				w.linef(`if grep -Fq %s "$HOME/.bashrc" 2>/dev/null; then f shline present; else f shline absent; fi`,
+					q(shellLineMarker))
+			}
+			if sh.MOTD == "quiet" {
+				extra = append(extra, config.ManagedFile{Target: HushloginTarget})
+			}
+			files = append(files[:len(files):len(files)], extra...)
 		}
 		for _, mf := range files {
 			t := targetExpr(mf.Target)

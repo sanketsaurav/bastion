@@ -141,10 +141,22 @@ func (v *validator) host(h *Host) {
 		v.managedFile(i, &f)
 	}
 	if h.Shell != nil {
-		if h.Shell.Prompt == "" {
-			v.addf("host.shell: prompt is required when shell is set")
-		} else if !promptRe.MatchString(h.Shell.Prompt) {
-			v.addf("host.shell.prompt: %q must be 1-32 characters of letters, digits, or . _ - (no spaces or quotes)", h.Shell.Prompt)
+		s := h.Shell
+		if s.Prompt == "" && s.MOTD == "" && s.Banner == "" {
+			v.addf("host.shell: set at least one of prompt, motd, or banner")
+		}
+		if s.Prompt != "" && !promptRe.MatchString(s.Prompt) {
+			v.addf("host.shell.prompt: %q must be 1-32 characters of letters, digits, or . _ - (no spaces or quotes)", s.Prompt)
+		}
+		switch s.MOTD {
+		case "", "default", "quiet":
+		default:
+			v.addf("host.shell.motd: must be \"default\" or \"quiet\", got %q", s.MOTD)
+		}
+		switch s.Banner {
+		case "", "art", "off":
+		default:
+			v.addf("host.shell.banner: must be \"art\" or \"off\", got %q", s.Banner)
 		}
 	}
 }

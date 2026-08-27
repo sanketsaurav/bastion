@@ -478,7 +478,20 @@ host:
 	wantIssue(t, validateDoc(t, minimalDoc+`
 host:
   shell: {}
-`), "prompt is required")
+`), "at least one of")
+	wantIssue(t, validateDoc(t, minimalDoc+`
+host:
+  shell:
+    motd: loud
+`), "host.shell.motd")
+	if issues := validateDoc(t, minimalDoc+`
+host:
+  shell:
+    motd: quiet
+    banner: off
+`); len(issues) != 0 {
+		t.Fatalf("motd/banner-only shell rejected: %v", issues)
+	}
 	if issues := validateDoc(t, minimalDoc+`
 host:
   shell:

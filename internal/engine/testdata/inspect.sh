@@ -25,6 +25,13 @@ if [ -e "$t" ]; then
 else f file fi8uY29uZmlnL2Jhc3Rpb24vc2hlbGwuc2g= absent; fi
 if [ -e "$t.bastion-backup" ]; then f bak fi8uY29uZmlnL2Jhc3Rpb24vc2hlbGwuc2g= present; else f bak fi8uY29uZmlnL2Jhc3Rpb24vc2hlbGwuc2g= absent; fi
 m=$(cat /var/lib/bastion/state/testbox/files/2b1aae370a5deedf.json 2>/dev/null || true); [ -n "$m" ] && f marker file 2b1aae370a5deedf "$(eb "$m")"
+t="$HOME"/.hushlogin
+if [ -e "$t" ]; then
+  if [ -r "$t" ]; then sha=$(sha256sum <"$t" | cut -d' ' -f1); else sha=unreadable; fi
+  f file fi8uaHVzaGxvZ2lu present "$sha" "$(stat -c %a "$t" 2>/dev/null || echo '?')"
+else f file fi8uaHVzaGxvZ2lu absent; fi
+if [ -e "$t.bastion-backup" ]; then f bak fi8uaHVzaGxvZ2lu present; else f bak fi8uaHVzaGxvZ2lu absent; fi
+m=$(cat /var/lib/bastion/state/testbox/files/af87863e7924ae82.json 2>/dev/null || true); [ -n "$m" ] && f marker file af87863e7924ae82 "$(eb "$m")"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 || sudo -n docker compose version >/dev/null 2>&1; then f feat docker "$(eb "$(docker --version 2>/dev/null | head -1)")"; else f feat docker absent; fi
 m=$(cat /var/lib/bastion/state/testbox/features/docker.json 2>/dev/null || true); [ -n "$m" ] && f marker feature docker "$(eb "$m")"
 if command -v tmux >/dev/null 2>&1; then f feat tmux "$(eb "$(tmux -V 2>/dev/null || tmux --version 2>/dev/null | head -1 || echo present)")"; else f feat tmux absent; fi

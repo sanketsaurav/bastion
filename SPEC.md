@@ -209,6 +209,8 @@ host:                               # (B)
   shell:                            # (B)
     prompt: alice                   # PS1 shows alice@<host> in place of the
                                     # OS Login username; cosmetic only
+    motd: quiet                     # default | quiet (writes ~/.hushlogin)
+    banner: art                     # art (default) | off — `bastion ssh` nameplate
 
 ingress:                            # (D) enables public endpoints (§9.8)
   baseDomain: apps.example.com      # default hostname: <service>.<baseDomain>
@@ -458,7 +460,18 @@ data Bastion cannot rename). The integration file is a generated managed
 file flowing through the standard replace pipeline — digests, plans, and
 markers included — and the source line is appended once, delimited, at the
 end of `~/.bashrc` so it wins over the distribution's own PS1. Cosmetic
-only: authentication, `whoami`, and home directory are unchanged. `template` mode (Δ7) renders the source locally at plan
+only: authentication, `whoami`, and home directory are unchanged.
+
+`host.shell.motd: quiet` writes an empty `~/.hushlogin` through the same
+pipeline, silencing the distribution's dynamic MOTD (news and ads included)
+and sshd's last-login line on every SSH path. Reverting to `default` stops
+managing the file but never deletes it. The `bastion ssh` nameplate is
+client-side: the box name in half-block art with an accent color derived
+from the name — every box looks distinct at a glance — plus the box's
+coordinates and public URLs, all from local configuration so the session
+starts without an extra round trip. It prints only to a terminal, never
+when extra ssh arguments are passed, and is disabled with `banner: off` or
+`--no-banner`. `template` mode (Δ7) renders the source locally at plan
 time via Go text/template with the non-secret context `.Box.{Name,Labels}`,
 `.Provider.{Project,Zone,Instance}`, `.Workspace.{Mount,DataRoot}`; unknown
 keys are plan-time errors and secret values are never reachable.

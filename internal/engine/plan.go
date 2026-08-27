@@ -138,17 +138,26 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 			}
 		}
 
-		// 4. Shell integration: the managed shell.sh flows through the
-		// ordinary file pipeline; the .bashrc source line is its own step.
-		if box.Host.Shell != nil {
-			if act := fileActionFromContent(facts, ShellTarget, shellContent(box.Host.Shell.Prompt), "0644"); act != nil {
-				actions = append(actions, *act)
+		// 4. Shell integration: the managed shell.sh and ~/.hushlogin flow
+		// through the ordinary file pipeline; the .bashrc source line is
+		// its own step.
+		if sh := box.Host.Shell; sh != nil {
+			if sh.Prompt != "" {
+				if act := fileActionFromContent(facts, ShellTarget, shellContent(sh.Prompt), "0644"); act != nil {
+					actions = append(actions, *act)
+				}
+				if !facts.ShellLine {
+					actions = append(actions, Action{
+						ID: "shell-line", Kind: KindShellLine,
+						Summary: "add the bastion shell-integration line to ~/.bashrc",
+					})
+				}
 			}
-			if !facts.ShellLine {
-				actions = append(actions, Action{
-					ID: "shell-line", Kind: KindShellLine,
-					Summary: "add the bastion shell-integration line to ~/.bashrc",
-				})
+			if sh.MOTD == "quiet" {
+				if act := fileActionFromContent(facts, HushloginTarget, nil, "0644"); act != nil {
+					act.Summary = "write ~/.hushlogin (silence the login MOTD)"
+					actions = append(actions, *act)
+				}
 			}
 		}
 	}

@@ -6,10 +6,14 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sanketsaurav/bastion/internal/banner"
+	"github.com/sanketsaurav/bastion/internal/registry"
 )
 
 func (a *App) sshCmd() *cobra.Command {
-	return &cobra.Command{
+	var noBanner bool
+	cmd := &cobra.Command{
 		Use:   "ssh [box] [-- ssh-args...]",
 		Short: "Open an interactive SSH session (IAP by default)",
 		Args:  cobra.ArbitraryArgs,
@@ -22,6 +26,9 @@ func (a *App) sshCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if !noBanner && len(extra) == 0 {
+				a.printBanner(res)
+			}
 			argv := a.clientFor(res).SSHArgv(extra)
 			a.ui().debugf("+ %s", strings.Join(argv, " "))
 			code, err := a.runner.Interactive(cmd.Context(), argv)
@@ -31,6 +38,40 @@ func (a *App) sshCmd() *cobra.Command {
 			return exitWithCode(code)
 		},
 	}
+	cmd.Flags().BoolVar(&noBanner, "no-banner", false, "skip the box nameplate before the session")
+	return cmd
+}
+
+// printBanner writes the box nameplate before an interactive session: the
+// name in half-block art with a stable per-box accent color, then where the
+// box lives and its public URLs. Everything comes from local configuration,
+// so the session starts without any extra round trip. Decoration goes to
+// stderr, only when it is a terminal.
+func (a *App) printBanner(res *registry.Resolution) {
+	box := res.Loaded.Box
+	if box.Host != nil && box.Host.Shell != nil && box.Host.Shell.Banner == "off" {
+		return
+	}
+	if !isTerminal(a.stderr) {
+		return
+	}
+	u := a.ui()
+	name := box.Metadata.Name
+	accent := fmt.Sprintf("\x1b[38;5;%dm", banner.Color(name))
+	fmt.Fprintln(a.stderr)
+	for _, row := range banner.Art(name) {
+		if u.color {
+			fmt.Fprintf(a.stderr, "  %s%s%s\n", accent, row, ansiReset)
+		} else {
+			fmt.Fprintf(a.stderr, "  %s\n", row)
+		}
+	}
+	fmt.Fprintf(a.stderr, "\n  %s\n", u.paint(ansiDim,
+		fmt.Sprintf("%s/%s · %s", box.Provider.Project, box.Provider.Zone, box.Provider.Instance)))
+	for _, pe := range box.PublicEndpoints() {
+		fmt.Fprintf(a.stderr, "  %s\n", u.paint(ansiDim, "https://"+pe.Hostname))
+	}
+	fmt.Fprintln(a.stderr)
 }
 
 func (a *App) execCmd() *cobra.Command {

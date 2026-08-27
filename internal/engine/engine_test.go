@@ -38,6 +38,7 @@ host:
       permissions: "0600"
   shell:
     prompt: dev
+    motd: quiet
 volumes:
   data:
     persistence: durable

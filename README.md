@@ -85,6 +85,7 @@ host:
       mode: replace
   shell:
     prompt: alice          # PS1 shows alice@dev, not ext_alice_gmail_com@dev
+    motd: quiet            # no Ubuntu login wall of text (or ads)
 
 ingress:
   baseDomain: apps.example.com   # one wildcard DNS record serves every app

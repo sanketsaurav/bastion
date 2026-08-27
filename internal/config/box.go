@@ -103,14 +103,23 @@ type Host struct {
 	Shell    *Shell        `yaml:"shell,omitempty" json:"shell,omitempty"`
 }
 
-// Shell configures bastion's shell integration on the box (SPEC.md §8.5):
-// a managed ~/.config/bastion/shell.sh plus exactly one delimited source
-// line in ~/.bashrc.
+// Shell configures bastion's login experience on the box (SPEC.md §8.5):
+// PS1 via a managed ~/.config/bastion/shell.sh plus exactly one delimited
+// source line in ~/.bashrc, MOTD suppression via ~/.hushlogin, and the
+// client-side `bastion ssh` nameplate. At least one field must be set.
 type Shell struct {
 	// Prompt is the name PS1 shows in place of the login username
 	// (e.g. `alice@devbox` instead of `ext_..._gmail_com@devbox`).
 	// Cosmetic only: authentication and `whoami` are unchanged.
 	Prompt string `yaml:"prompt,omitempty" json:"prompt,omitempty"`
+	// MOTD "quiet" writes an empty ~/.hushlogin, silencing the
+	// distribution's login messages and sshd's last-login line for every
+	// SSH path. "default" (or empty) leaves login output alone — though an
+	// existing ~/.hushlogin is never deleted, only unmanaged.
+	MOTD string `yaml:"motd,omitempty" json:"motd,omitempty" jsonschema:"enum=default,enum=quiet"`
+	// Banner controls the nameplate `bastion ssh` prints before the
+	// session: "art" (the default) or "off".
+	Banner string `yaml:"banner,omitempty" json:"banner,omitempty" jsonschema:"enum=art,enum=off"`
 }
 
 type Feature struct {

@@ -7,6 +7,11 @@ package engine
 // ShellTarget is where the managed integration file lives on the box.
 const ShellTarget = "~/.config/bastion/shell.sh"
 
+// HushloginTarget is the empty managed file that silences the
+// distribution's MOTD and sshd's last-login line (host.shell.motd: quiet).
+// Its existence is the mechanism; the content stays empty.
+const HushloginTarget = "~/.hushlogin"
+
 // shellLineMarker is the delimiter that makes the .bashrc line findable and
 // the append idempotent.
 const shellLineMarker = "# bastion:shell-integration"
