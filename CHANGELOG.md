@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.3.0 - 2026-08-27
+
+### Features
+
+- **`bastion audit`** — hardening checks with none of the compliance
+  theater: a short list of high-value findings, each mapping to a real
+  compromise path, each with its exact, copy-pasteable fix. Cloud-side it
+  flags attached service accounts (anything on the box can mint their
+  tokens through the metadata server), firewall rules open to the world
+  beyond your declared surface (world-open SSH gets the scope-to-IAP fix
+  rather than deletion), and disabled Secure Boot; guest-side it verifies
+  security updates apply themselves, no update is stuck waiting on a
+  reboot, password authentication is off, and nothing listens on
+  `0.0.0.0` that you didn't declare. Read-only, nonzero exit on findings,
+  and provider checks run even against a stopped box. Provider-specific
+  checks sit behind an auditor interface, ready for hosts beyond GCP.
+- **`host.hardening.autoReboot: "HH:MM"`** — lets unattended-upgrades
+  reboot in a nightly window when a security update requires it, closing
+  the "kernel patch downloaded but inactive" gap audit most often finds. A
+  bastion box is uniquely safe to reboot: services restart themselves,
+  data is durable, and the IP should be static.
+- **Animated progress** — in-progress steps (starting, waiting for SSH,
+  inspecting, every apply action, doctor and audit runs) now spin in
+  place on a terminal, show elapsed time when they drag, and resolve to a
+  check or cross. Pipes, `--json`, and `--verbose` keep the plain
+  append-only output.
+
 ## v0.2.0 - 2026-08-27
 
 ### Features
