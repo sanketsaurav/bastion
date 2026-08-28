@@ -68,6 +68,7 @@ func TestPlanFreshBox(t *testing.T) {
 		"shell-line",
 		"user-alias",
 		"file:~/.hushlogin",
+		"file:/etc/apt/apt.conf.d/51bastion-unattended-reboot",
 		"network",
 		"volume:data",
 		"volume:scratch",
@@ -102,6 +103,7 @@ func convergedFactLines(t *testing.T, in *Input) []string {
 	tmuxSHA := sha256hex([]byte(fixtureTmuxConf))
 	shellSHA := sha256hex(shellContent("dev"))
 	hushSHA := sha256hex(nil)
+	rebootSHA := sha256hex(autoRebootContent("04:30"))
 	_, sourceDigest, err := PackLocalFeature(in.Dir + "/features/mytool")
 	if err != nil {
 		t.Fatal(err)
@@ -123,6 +125,8 @@ func convergedFactLines(t *testing.T, in *Input) []string {
 		"@f bak " + b64s(ShellTarget) + " absent",
 		"@f file " + b64s(HushloginTarget) + " present " + hushSHA + " 644",
 		"@f bak " + b64s(HushloginTarget) + " absent",
+		"@f file " + b64s(AutoRebootTarget) + " present " + rebootSHA + " 644",
+		"@f bak " + b64s(AutoRebootTarget) + " absent",
 		"@f shline present",
 		"@f ualias 1000 1000 granted",
 		"@f feat docker " + b64s("Docker version 27.0.0"),
@@ -131,6 +135,7 @@ func convergedFactLines(t *testing.T, in *Input) []string {
 		"@f marker file x " + marker(FileMarker{Target: "~/.tmux.conf", SHA256: tmuxSHA, Mode: "0600"}),
 		"@f marker file y " + marker(FileMarker{Target: ShellTarget, SHA256: shellSHA, Mode: "0644"}),
 		"@f marker file z " + marker(FileMarker{Target: HushloginTarget, SHA256: hushSHA, Mode: "0644"}),
+		"@f marker file w " + marker(FileMarker{Target: AutoRebootTarget, SHA256: rebootSHA, Mode: "0644"}),
 		"@f marker feature docker " + marker(FeatureMarker{Name: "docker", Version: "1", OptionsDigest: optionsDigest(nil)}),
 		"@f marker feature tmux " + marker(FeatureMarker{Name: "tmux", Version: "1", OptionsDigest: optionsDigest(nil)}),
 		"@f marker lfeature mytool " + marker(LocalFeatureMarker{Name: "mytool", Version: "2", SourceDigest: sourceDigest, InputsDigest: inputsDigest}),

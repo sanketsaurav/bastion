@@ -50,6 +50,9 @@ if e=$(getent passwd %s); then f ualias "$(printf %%s "$e" | cut -d: -f3)" "$(id
 			}
 			files = append(files[:len(files):len(files)], extra...)
 		}
+		if hd := box.Host.Hardening; hd != nil && hd.AutoReboot != "" {
+			files = append(files[:len(files):len(files)], config.ManagedFile{Target: AutoRebootTarget})
+		}
 		for _, mf := range files {
 			t := targetExpr(mf.Target)
 			bt := q(b64([]byte(mf.Target)))

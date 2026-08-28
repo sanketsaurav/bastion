@@ -14,6 +14,18 @@ type Instance struct {
 	Metadata    map[string]string `json:"-"`
 	LastStart   string            `json:"lastStart,omitempty"`
 	LastStop    string            `json:"lastStop,omitempty"`
+
+	// Security-relevant posture, consumed by `bastion audit`.
+	ServiceAccounts []ServiceAccount `json:"serviceAccounts,omitempty"`
+	Network         string           `json:"network,omitempty"`    // first NIC's network name
+	SecureBoot      *bool            `json:"secureBoot,omitempty"` // nil = platform didn't report
+}
+
+// ServiceAccount is a cloud identity attached to the instance — anything
+// running on the box can mint tokens for it via the metadata server.
+type ServiceAccount struct {
+	Email  string   `json:"email"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 func (i *Instance) Running() bool   { return i.Status == "RUNNING" }

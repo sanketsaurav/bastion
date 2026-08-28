@@ -120,6 +120,7 @@ func (a *App) Root() *cobra.Command {
 		a.featureCmd(),
 		a.volumeCmd(),
 		a.doctorCmd(),
+		a.auditCmd(),
 		a.versionCmd(),
 	)
 	return root

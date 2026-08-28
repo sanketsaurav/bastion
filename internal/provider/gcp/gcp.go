@@ -388,11 +388,19 @@ func parseInstance(data []byte) (*provider.Instance, error) {
 			} `json:"items"`
 		} `json:"metadata"`
 		NetworkInterfaces []struct {
+			Network       string `json:"network"`
 			NetworkIP     string `json:"networkIP"`
 			AccessConfigs []struct {
 				NatIP string `json:"natIP"`
 			} `json:"accessConfigs"`
 		} `json:"networkInterfaces"`
+		ServiceAccounts []struct {
+			Email  string   `json:"email"`
+			Scopes []string `json:"scopes"`
+		} `json:"serviceAccounts"`
+		ShieldedInstanceConfig *struct {
+			EnableSecureBoot bool `json:"enableSecureBoot"`
+		} `json:"shieldedInstanceConfig"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parsing gcloud instance description: %w", err)
@@ -415,11 +423,21 @@ func parseInstance(data []byte) (*provider.Instance, error) {
 		if inst.InternalIP == "" {
 			inst.InternalIP = nic.NetworkIP
 		}
+		if inst.Network == "" {
+			inst.Network = pathBase(nic.Network)
+		}
 		for _, ac := range nic.AccessConfigs {
 			if inst.ExternalIP == "" && ac.NatIP != "" {
 				inst.ExternalIP = ac.NatIP
 			}
 		}
+	}
+	for _, sa := range raw.ServiceAccounts {
+		inst.ServiceAccounts = append(inst.ServiceAccounts, provider.ServiceAccount{Email: sa.Email, Scopes: sa.Scopes})
+	}
+	if raw.ShieldedInstanceConfig != nil {
+		sb := raw.ShieldedInstanceConfig.EnableSecureBoot
+		inst.SecureBoot = &sb
 	}
 	return inst, nil
 }

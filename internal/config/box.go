@@ -104,10 +104,21 @@ type Workspace struct {
 }
 
 type Host struct {
-	Packages []string      `yaml:"packages,omitempty" json:"packages,omitempty"`
-	Features []Feature     `yaml:"features,omitempty" json:"features,omitempty"`
-	Files    []ManagedFile `yaml:"files,omitempty" json:"files,omitempty"`
-	Shell    *Shell        `yaml:"shell,omitempty" json:"shell,omitempty"`
+	Packages  []string      `yaml:"packages,omitempty" json:"packages,omitempty"`
+	Features  []Feature     `yaml:"features,omitempty" json:"features,omitempty"`
+	Files     []ManagedFile `yaml:"files,omitempty" json:"files,omitempty"`
+	Shell     *Shell        `yaml:"shell,omitempty" json:"shell,omitempty"`
+	Hardening *Hardening    `yaml:"hardening,omitempty" json:"hardening,omitempty"`
+}
+
+// Hardening converges guest security posture (SPEC.md §8.5). `bastion
+// audit` reports; this section fixes.
+type Hardening struct {
+	// AutoReboot ("HH:MM") lets unattended-upgrades reboot in a nightly
+	// window when a security update needs it. A bastion box is uniquely
+	// safe to reboot: services restart, data is durable, the IP is
+	// static.
+	AutoReboot string `yaml:"autoReboot,omitempty" json:"autoReboot,omitempty"`
 }
 
 // Shell configures bastion's login experience on the box (SPEC.md §8.5):

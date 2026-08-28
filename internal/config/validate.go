@@ -21,6 +21,8 @@ var (
 	// userAlias creates a real passwd entry, so the prompt must then also
 	// be a valid unix username.
 	unixNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+	// autoReboot windows are 24-hour clock times.
+	rebootTimeRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 )
 
 // ValidateBox returns every semantic issue in a normalized Box. dir is the box
@@ -168,6 +170,14 @@ func (v *validator) host(h *Host) {
 			case !unixNameRe.MatchString(s.Prompt):
 				v.addf("host.shell.userAlias: prompt %q must be a valid unix username (lowercase letters, digits, - _; 32 chars max)", s.Prompt)
 			}
+		}
+	}
+	if h.Hardening != nil {
+		switch {
+		case h.Hardening.AutoReboot == "":
+			v.addf("host.hardening: set autoReboot (\"HH:MM\")")
+		case !rebootTimeRe.MatchString(h.Hardening.AutoReboot):
+			v.addf("host.hardening.autoReboot: %q must be a 24-hour \"HH:MM\" time", h.Hardening.AutoReboot)
 		}
 	}
 }

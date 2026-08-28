@@ -40,6 +40,8 @@ host:
     prompt: dev
     motd: quiet
     userAlias: true
+  hardening:
+    autoReboot: "04:30"
 volumes:
   data:
     persistence: durable

@@ -18,6 +18,7 @@ $ bastion apply dev           # packages, tools, dotfiles, services
 $ bastion port dev metrics:web        # private endpoint → localhost tunnel
 $ bastion service logs dev blog -f    # tail a service
 $ bastion ssh-config dev --install    # reach the box from any SSH tool (IDEs, scp, rsync)
+$ bastion audit dev                   # hardening check-up: real risks only, exact fixes
 $ bastion down dev            # stop compute; disks and data stay
 ```
 

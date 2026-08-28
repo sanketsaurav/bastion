@@ -177,6 +177,14 @@ func BuildPlan(in *Input, facts *Facts) (*Plan, error) {
 				}
 			}
 		}
+
+		// 5. Hardening, through the same file pipeline.
+		if hd := box.Host.Hardening; hd != nil && hd.AutoReboot != "" {
+			if act := fileActionFromContent(facts, AutoRebootTarget, autoRebootContent(hd.AutoReboot), "0644"); act != nil {
+				act.Summary = fmt.Sprintf("enable security-update auto-reboot at %s", hd.AutoReboot)
+				actions = append(actions, *act)
+			}
+		}
 	}
 
 	// 4. Runtime, volumes, secrets, services.

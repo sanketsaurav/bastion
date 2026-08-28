@@ -3,7 +3,7 @@
 - Status: Active (supersedes `docs/original-spec.md`, draft 0.1)
 - Specification version: 0.3
 - Configuration API: `bastion/v1alpha1`
-- Last updated: 2026-08-26
+- Last updated: 2026-08-27
 
 Bastion is a local, config-driven CLI for operating a personal Linux development
 box on Google Compute Engine. The CLI on your computer is the control plane:
@@ -214,6 +214,8 @@ host:                               # (B)
     motd: quiet                     # default | quiet (writes ~/.hushlogin)
     banner: art                     # art (default) | off — `bastion ssh` nameplate
     userAlias: true                 # passwd alias: whoami reports the prompt name
+  hardening:                        # (B) §8.7
+    autoReboot: "04:30"             # security updates may reboot in this window
 
 ingress:                            # (D) enables public endpoints (§9.8)
   baseDomain: apps.example.com      # default hostname: <service>.<baseDomain>
@@ -311,6 +313,7 @@ bastion ssh-config [box]               Print a ~/.ssh/config Host block (--insta
 bastion exec [box] -- <cmd> [args...]  Argv forwarded verbatim; --shell opts into shell
 bastion port [box] <remote-port> [--local-port N]   Loopback ssh -L forward
 bastion doctor [box]                   Environment and connectivity diagnosis
+bastion audit [box]                    Read-only hardening checks with exact fixes
 ```
 
 Milestone B — convergence: `plan`, `apply`, and `up` gains its apply step.
@@ -518,6 +521,16 @@ drift — planning always combines them with live checks (package state, file
 digests, container labels). Recovery never requires deleting broad state
 directories.
 
+### 8.7 Hardening
+
+`host.hardening.autoReboot: "HH:MM"` lets unattended-upgrades reboot in a
+nightly window when a security update requires it — the fix for kernel and
+libc patches that otherwise sit downloaded but inactive. A bastion box is
+uniquely safe to reboot: services are `unless-stopped`, data is durable,
+and the IP should be static. The policy is one managed file through the
+ordinary pipeline; `bastion audit` reports the gaps this section exists to
+close.
+
 ## 9. Services (milestone C)
 
 ### 9.1 Model
@@ -685,7 +698,21 @@ access; instance existence and state; SSH/IAP reachability; OS Login
 configuration; guest OS support; guest internet egress (probed against a non-Google host, so Private Google Access cannot mask a missing NAT); non-interactive sudo; data-root mount and free
 space; Docker/Compose health; runner version match; service health; and known
 unsafe configuration (agent forwarding, mutable tags). Failures come with
-remediation text. Every apply gets an operation ID; `--json` emits versioned
+remediation text.
+
+`bastion audit` is doctor's security sibling: a deliberately short list of
+high-value hardening checks, each mapping to a real compromise path, each
+with its exact remediation, and strictly read-only. Provider-specific
+checks (attached cloud identities and their token exposure via the metadata
+server, world-open firewall rules beyond the declared surface — with the
+IAP-scoping fix for SSH — and platform boot security) come from a
+per-provider auditor interface, so future providers plug in their own;
+guest checks (self-applying security updates, pending reboots, password
+authentication, listeners on `0.0.0.0` outside the declared surface) are
+provider-neutral. Cloud checks run even against a stopped box. The exit
+code is nonzero when any check fails.
+
+Every apply gets an operation ID; `--json` emits versioned
 events (operation, resource, action, status, duration, redacted message).
 
 ## 14. Milestones
