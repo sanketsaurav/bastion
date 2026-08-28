@@ -150,29 +150,32 @@ func (a *App) runApply(ctx context.Context, client *gcp.Client, in *engine.Input
 	}
 	u := a.ui()
 
-	// Heartbeat: long steps (a Docker install runs minutes) tick with elapsed
-	// time so silence never looks like a hang.
+	// A spinner per step on terminals; elsewhere, plain lines plus a
+	// heartbeat so long steps (a Docker install runs minutes) never look
+	// like a hang in an append-only log.
 	var mu sync.Mutex
 	var curID string
 	var curStart time.Time
 	stop := make(chan struct{})
 	defer close(stop)
-	go func() {
-		ticker := time.NewTicker(20 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-ticker.C:
-				mu.Lock()
-				if curID != "" {
-					u.progressf("  %s %s (%ds elapsed)", u.paint(ansiDim, "…"), curID, int(time.Since(curStart).Seconds()))
+	if !u.spinAnimated() {
+		go func() {
+			ticker := time.NewTicker(20 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ticker.C:
+					mu.Lock()
+					if curID != "" {
+						u.progressf("  %s %s (%ds elapsed)", u.paint(ansiDim, "…"), curID, int(time.Since(curStart).Seconds()))
+					}
+					mu.Unlock()
 				}
-				mu.Unlock()
 			}
-		}
-	}()
+		}()
+	}
 	setCurrent := func(id string) {
 		mu.Lock()
 		curID = id
@@ -180,18 +183,20 @@ func (a *App) runApply(ctx context.Context, client *gcp.Client, in *engine.Input
 		mu.Unlock()
 	}
 
+	var stepSp *spinner
 	hooks := engine.ApplyHooks{
 		OnStart: func(id string) {
 			setCurrent(id)
-			u.progressf("→ %s", id)
+			stepSp = u.spin(id, "→ "+id)
 		},
 		OnDone: func(id, status string) {
 			setCurrent("")
 			if status == "ok" {
-				u.progressf("  %s %s", u.paint(ansiGreen, "✓"), id)
+				stepSp.done("  " + u.paint(ansiGreen, "✓") + " " + id)
 			} else {
-				u.progressf("  %s %s", u.paint(ansiRed, "✗"), id)
+				stepSp.done("  " + u.paint(ansiRed, "✗") + " " + id)
 			}
+			stepSp = nil
 		},
 		OnLog: func(id, line string) { u.debugf("    %s", line) },
 	}

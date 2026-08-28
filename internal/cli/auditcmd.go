@@ -25,6 +25,7 @@ func (a *App) auditCmd() *cobra.Command {
 			}
 			client := a.clientFor(res)
 			ctx := cmd.Context()
+			sp := a.ui().spin("Running checks", "")
 			reachable := false
 			if inst, err := client.Describe(ctx); err == nil && inst.Running() {
 				reachable = client.CheckSSH(ctx) == nil
@@ -36,6 +37,7 @@ func (a *App) auditCmd() *cobra.Command {
 				GuestReachable: reachable,
 			})
 
+			sp.erase()
 			u := a.ui()
 			if u.json {
 				if err := u.emit(results); err != nil {

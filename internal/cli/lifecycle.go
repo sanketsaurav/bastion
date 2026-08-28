@@ -52,32 +52,39 @@ func (a *App) upCmd() *cobra.Command {
 					return err
 				}
 			}
+			var startSp *spinner
 			switch {
 			case inst.Running():
 				u.progressf("%s is already running.", name)
 			case inst.Suspended():
-				u.progressf("Resuming %s…", name)
+				startSp = u.spin("Resuming "+name, "Resuming "+name+"…")
 				if err := client.Resume(ctx); err != nil {
+					startSp.fail("could not resume " + name)
 					return err
 				}
 			case inst.Stopped():
-				u.progressf("Starting %s…", name)
+				startSp = u.spin("Starting "+name, "Starting "+name+"…")
 				if err := client.Start(ctx); err != nil {
+					startSp.fail("could not start " + name)
 					return err
 				}
 			default:
 				return fmt.Errorf("instance is in unexpected status %q; check the GCP console", inst.Status)
 			}
 			if inst, err = waitForRunning(ctx, client); err != nil {
+				startSp.fail(name + " did not reach RUNNING")
 				return err
 			}
+			startSp.ok(name + " started")
 
 			sshReady := false
 			if !noWait {
-				u.progressf("Waiting for SSH…")
+				sshSp := u.spin("Waiting for SSH", "Waiting for SSH…")
 				if err := waitForSSH(ctx, client, u, waitTimeout); err != nil {
+					sshSp.fail("SSH did not become ready")
 					return err
 				}
+				sshSp.ok("SSH ready")
 				sshReady = true
 			}
 
@@ -151,13 +158,16 @@ func (a *App) downCmd() *cobra.Command {
 				fmt.Fprintf(u.out, "%s is already stopped.\n", name)
 				return nil
 			}
-			u.progressf("Stopping %s…", name)
+			stopSp := u.spin("Stopping "+name, "Stopping "+name+"…")
 			if err := client.Stop(ctx); err != nil {
+				stopSp.fail("could not stop " + name)
 				return err
 			}
 			if inst, err = waitForStatus(ctx, client, func(i *provider.Instance) bool { return i.Stopped() }); err != nil {
+				stopSp.fail(name + " did not stop cleanly")
 				return err
 			}
+			stopSp.erase()
 			if u.json {
 				return u.emit(map[string]any{"box": name, "status": inst.Status})
 			}

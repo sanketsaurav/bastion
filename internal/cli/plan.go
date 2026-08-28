@@ -24,9 +24,10 @@ func engineInput(res *registry.Resolution) *engine.Input {
 // computePlan inspects the guest and diffs it against the definition.
 func (a *App) computePlan(ctx context.Context, client *gcp.Client, in *engine.Input) (*engine.Plan, *engine.Facts, error) {
 	u := a.ui()
-	u.progressf("Inspecting %s…", in.BoxID)
+	sp := u.spin("Inspecting "+in.BoxID, "Inspecting "+in.BoxID+"…")
 	facts, raw, err := engine.Inspect(ctx, client, in)
 	if err != nil {
+		sp.fail("could not inspect " + in.BoxID)
 		if u.verbose {
 			for _, line := range raw {
 				u.debugf("inspect: %s", line)
@@ -34,6 +35,7 @@ func (a *App) computePlan(ctx context.Context, client *gcp.Client, in *engine.In
 		}
 		return nil, nil, err
 	}
+	sp.erase()
 	plan, err := engine.BuildPlan(in, facts)
 	if err != nil {
 		return nil, facts, err

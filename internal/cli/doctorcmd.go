@@ -18,6 +18,7 @@ func (a *App) doctorCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			sp := a.ui().spin("Running checks", "")
 			results := doctor.Run(cmd.Context(), doctor.Deps{
 				Runner:   a.runner,
 				LookPath: a.lookPath,
@@ -25,6 +26,7 @@ func (a *App) doctorCmd() *cobra.Command {
 				Box:      res.Loaded.Box,
 			})
 
+			sp.erase()
 			u := a.ui()
 			if u.json {
 				if err := u.emit(results); err != nil {
