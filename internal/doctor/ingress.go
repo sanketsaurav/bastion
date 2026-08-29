@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -103,10 +104,38 @@ func staticIPCheck(ctx context.Context, d Deps, ip string) Result {
 			d.Box.Metadata.Name, d.Box.Provider.Project, region, ip)}
 }
 
+// publicResolver asks public DNS directly — what the certificate authority
+// and visitors see. The system resolver negative-caches the NXDOMAIN from
+// probes run before a record existed, which kept checks red after the user
+// had already fixed DNS.
+var publicResolver = &net.Resolver{
+	PreferGo: true,
+	Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var dialer net.Dialer
+		conn, err := dialer.DialContext(ctx, network, "1.1.1.1:53")
+		if err != nil {
+			return dialer.DialContext(ctx, network, "8.8.8.8:53")
+		}
+		return conn, nil
+	},
+}
+
 func dnsCheck(ctx context.Context, d Deps, name, host, wantIP, createHint string) Result {
 	lookup := d.LookupHost
 	if lookup == nil {
 		lookup = func(ctx context.Context, h string) ([]string, error) {
+			ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+			defer cancel()
+			addrs, err := publicResolver.LookupHost(ctx, h)
+			if err == nil {
+				return addrs, nil
+			}
+			var dnsErr *net.DNSError
+			if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+				return nil, err // authoritative: the name really is absent
+			}
+			// Public DNS unreachable (filtered port 53?) — the system
+			// resolver is better than no answer.
 			return net.DefaultResolver.LookupHost(ctx, h)
 		}
 	}
