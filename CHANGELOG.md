@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.1 - 2026-08-31
+
+### Fixes
+
+- **Deploys are stability-probed.** `compose up` accepts a container that
+  starts and immediately dies, so a service crash-looping on bad
+  configuration used to deploy with a green check and surface later as a
+  502. Every service and ingress deploy now watches the container for its
+  first seconds; one that exits or restarts fails the apply step with the
+  container's recent logs right in the error, and the step replans on the
+  next apply. Declared healthchecks still gate full readiness afterwards.
+- **Doctor's ingress DNS checks query public resolvers** (1.1.1.1, then
+  8.8.8.8; falling back to the system resolver when public DNS is
+  unreachable). The system resolver negative-caches lookups made before a
+  record existed, which kept a hostname check red long after the record
+  was fixed — and public DNS is the vantage that certificate authorities
+  and visitors actually see.
+
 ## v0.3.0 - 2026-08-27
 
 ### Features
