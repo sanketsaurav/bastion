@@ -209,7 +209,30 @@ func serviceBody(in *Input, sa *serviceAction) (string, error) {
 printf %%s %s | base64 -d | sudo -n tee %s >/dev/null
 dk compose -p %s -f %s up -d --pull %s --remove-orphans%s
 `, q(dir), q(b64(sa.Compose)), q(in.composePath(sa.Name)),
-		q(in.projectName(sa.Name)), q(in.composePath(sa.Name)), pull, recreate) + markerWrite(in, "services", sa.Name, marker), nil
+		q(in.projectName(sa.Name)), q(in.composePath(sa.Name)), pull, recreate) +
+		stabilityProbe("service "+sa.Name, in.containerName(sa.Name)) +
+		markerWrite(in, "services", sa.Name, marker), nil
+}
+
+// stabilityProbe fails a deploy whose container exits or restarts within
+// the first seconds — the crash-loop class (bad env, bad flags) that
+// `compose up -d` accepts silently, which otherwise surfaces as a 502 or a
+// dead app long after apply reported ok. Two StartedAt samples catch a
+// restart even when the second look lands mid-run. It sits before the
+// marker write, so a failed deploy replans; declared healthchecks still
+// gate full readiness afterwards.
+func stabilityProbe(display, cname string) string {
+	return fmt.Sprintf(`sleep 2
+s1=$(dk inspect -f '{{.State.StartedAt}}' %s)
+sleep 3
+s2=$(dk inspect -f '{{.State.StartedAt}}' %s)
+status=$(dk inspect -f '{{.State.Status}}' %s)
+if [ "$status" != running ] || [ "$s1" != "$s2" ]; then
+  echo "%s is not stable after deploy (status $status); recent logs:"
+  dk logs --tail 12 %s 2>&1 | sed 's/^/  /' || true
+  exit 1
+fi
+`, q(cname), q(cname), q(cname), display, q(cname))
 }
 
 func healthBody(in *Input, svc string, timeout time.Duration) string {
@@ -250,7 +273,8 @@ dk compose -p %s -f %s up -d --pull missing --remove-orphans --force-recreate
 `, q(dir), q(in.ingressDataDir()+"/data"), q(in.ingressDataDir()+"/config"),
 		q(b64(ia.Caddyfile)), q(dir+"/Caddyfile"),
 		q(b64(ia.Compose)), q(dir+"/compose.yaml"),
-		q(in.ingressName()), q(dir+"/compose.yaml"))
+		q(in.ingressName()), q(dir+"/compose.yaml")) +
+		stabilityProbe("the ingress proxy", in.ingressName())
 }
 
 // ingressRemoveBody stops the proxy and removes its generated config.

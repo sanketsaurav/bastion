@@ -595,7 +595,11 @@ overrides will be per-service, prominent in plans, and never a global default.
 ### 9.7 Reconciliation
 
 Apply replaces containers whose generated definition changed (no zero-downtime
-requirement). Removing a service from config: the plan shows stop + removal;
+requirement). Every deploy — services and the ingress proxy alike — ends
+with a stability probe: a container that exits or restarts within its first
+seconds fails the step with its recent logs in the error, whether or not a
+healthcheck is declared, and the step's marker is never written so the next
+plan re-deploys. Removing a service from config: the plan shows stop + removal;
 durable volumes are retained and reported orphaned; ephemeral volumes are
 deleted only after confirmation. Containers without Bastion labels are never
 touched. `up` starts declared services and waits for health checks up to a

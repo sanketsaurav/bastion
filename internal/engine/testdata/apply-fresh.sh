@@ -148,6 +148,16 @@ s14() {
   sudo -n mkdir -p /var/lib/bastion/services/testbox/db
   printf %s IyBHZW5lcmF0ZWQgYnkgYmFzdGlvbiB0ZXN0IGZvciBib3ggInRlc3Rib3giLiBEbyBub3QgZWRpdDsgYXBwbHkgb3ZlcndyaXRlcyB0aGlzIGZpbGUuCm5hbWU6ICJiYXN0aW9uLXRlc3Rib3gtZGIiCnNlcnZpY2VzOgogIGRiOgogICAgaW1hZ2U6ICJkb2NrZXIuaW8vbGlicmFyeS9wb3N0Z3JlczoxNi40IgogICAgY29udGFpbmVyX25hbWU6ICJiYXN0aW9uLXRlc3Rib3gtZGIiCiAgICByZXN0YXJ0OiAidW5sZXNzLXN0b3BwZWQiCiAgICB2b2x1bWVzOgogICAgICAtICIvbW50L2Jhc3Rpb24vdm9sdW1lcy9kYXRhOi92YXIvbGliL3Bvc3RncmVzcWwvZGF0YSIKICAgIGhlYWx0aGNoZWNrOgogICAgICB0ZXN0OiBbIkNNRCIsInBnX2lzcmVhZHkiXQogICAgICBpbnRlcnZhbDogMTBzCiAgICBzZWN1cml0eV9vcHQ6CiAgICAgIC0gbm8tbmV3LXByaXZpbGVnZXM6dHJ1ZQogICAgbGFiZWxzOgogICAgICBiYXN0aW9uLmJveC1pZDogInRlc3Rib3giCiAgICAgIGJhc3Rpb24uc2VydmljZTogImRiIgogICAgICBiYXN0aW9uLmltYWdlOiAiZG9ja2VyLmlvL2xpYnJhcnkvcG9zdGdyZXM6MTYuNCIKICAgICAgYmFzdGlvbi52ZXJzaW9uOiAidGVzdCIKICAgICAgYmFzdGlvbi5jb25maWctZGlnZXN0OiAiOGE5ODUwOTExZDE5YjgwNDcxNTRhM2VmNjFmNzUyMzllM2M0MDRmZTRkZmRlMmUwZGZhMGMwZWEyYmY0MjhhOCIKbmV0d29ya3M6CiAgZGVmYXVsdDoKICAgIG5hbWU6ICJiYXN0aW9uLXRlc3Rib3giCiAgICBleHRlcm5hbDogdHJ1ZQo= | base64 -d | sudo -n tee /var/lib/bastion/services/testbox/db/compose.yaml >/dev/null
   dk compose -p bastion-testbox-db -f /var/lib/bastion/services/testbox/db/compose.yaml up -d --pull missing --remove-orphans
+  sleep 2
+  s1=$(dk inspect -f '{{.State.StartedAt}}' bastion-testbox-db)
+  sleep 3
+  s2=$(dk inspect -f '{{.State.StartedAt}}' bastion-testbox-db)
+  status=$(dk inspect -f '{{.State.Status}}' bastion-testbox-db)
+  if [ "$status" != running ] || [ "$s1" != "$s2" ]; then
+    echo "service db is not stable after deploy (status $status); recent logs:"
+    dk logs --tail 12 bastion-testbox-db 2>&1 | sed 's/^/  /' || true
+    exit 1
+  fi
   printf %s eyJuYW1lIjoiZGIiLCJjb25maWdEaWdlc3QiOiI4YTk4NTA5MTFkMTliODA0NzE1NGEzZWY2MWY3NTIzOWUzYzQwNGZlNGRmZGUyZTBkZmEwYzBlYTJiZjQyOGE4IiwiaW1hZ2UiOiJkb2NrZXIuaW8vbGlicmFyeS9wb3N0Z3JlczoxNi40In0= | base64 -d | sudo -n tee /var/lib/bastion/state/testbox/services/.db.tmp >/dev/null && sudo -n mv /var/lib/bastion/state/testbox/services/.db.tmp /var/lib/bastion/state/testbox/services/db.json
 }
 run a14 s14
@@ -173,6 +183,16 @@ s17() {
   sudo -n mkdir -p /var/lib/bastion/services/testbox/web
   printf %s IyBHZW5lcmF0ZWQgYnkgYmFzdGlvbiB0ZXN0IGZvciBib3ggInRlc3Rib3giLiBEbyBub3QgZWRpdDsgYXBwbHkgb3ZlcndyaXRlcyB0aGlzIGZpbGUuCm5hbWU6ICJiYXN0aW9uLXRlc3Rib3gtd2ViIgpzZXJ2aWNlczoKICB3ZWI6CiAgICBpbWFnZTogImdoY3IuaW8vZXhhbXBsZS93ZWJAc2hhMjU2OjAwMTEyMjMzNDQ1NTY2Nzc4ODk5MDAxMTIyMzM0NDU1NjY3Nzg4OTkwMDExMjIzMzQ0NTU2Njc3ODg5OTAwMTEiCiAgICBjb250YWluZXJfbmFtZTogImJhc3Rpb24tdGVzdGJveC13ZWIiCiAgICByZXN0YXJ0OiAidW5sZXNzLXN0b3BwZWQiCiAgICBlbnZpcm9ubWVudDoKICAgICAgTE9HX0xFVkVMOiAiaW5mbyIKICAgIGVudl9maWxlOgogICAgICAtICIvdmFyL2xpYi9iYXN0aW9uL3NlY3JldHMvdGVzdGJveC93ZWIuZW52IgogICAgcG9ydHM6CiAgICAgIC0gIjEyNy4wLjAuMTozMDAwOjMwMDAiCiAgICB2b2x1bWVzOgogICAgICAtICJiYXN0aW9uLXRlc3Rib3gtc2NyYXRjaDovdG1wL2NhY2hlIgogICAgc2VjdXJpdHlfb3B0OgogICAgICAtIG5vLW5ldy1wcml2aWxlZ2VzOnRydWUKICAgIGxhYmVsczoKICAgICAgYmFzdGlvbi5ib3gtaWQ6ICJ0ZXN0Ym94IgogICAgICBiYXN0aW9uLnNlcnZpY2U6ICJ3ZWIiCiAgICAgIGJhc3Rpb24uaW1hZ2U6ICJnaGNyLmlvL2V4YW1wbGUvd2ViQHNoYTI1NjowMDExMjIzMzQ0NTU2Njc3ODg5OTAwMTEyMjMzNDQ1NTY2Nzc4ODk5MDAxMTIyMzM0NDU1NjY3Nzg4OTkwMDExIgogICAgICBiYXN0aW9uLnZlcnNpb246ICJ0ZXN0IgogICAgICBiYXN0aW9uLmNvbmZpZy1kaWdlc3Q6ICJjMDg5MTA3OWVkZTA1ODEyZDlmOTE3ZDc3YjJhYWYxOTgxOTFiNTk5MmNlYjc1ZGY3ODA1ZGU2ZTQyNzM1ZjM1IgpuZXR3b3JrczoKICBkZWZhdWx0OgogICAgbmFtZTogImJhc3Rpb24tdGVzdGJveCIKICAgIGV4dGVybmFsOiB0cnVlCnZvbHVtZXM6CiAgYmFzdGlvbi10ZXN0Ym94LXNjcmF0Y2g6CiAgICBleHRlcm5hbDogdHJ1ZQo= | base64 -d | sudo -n tee /var/lib/bastion/services/testbox/web/compose.yaml >/dev/null
   dk compose -p bastion-testbox-web -f /var/lib/bastion/services/testbox/web/compose.yaml up -d --pull missing --remove-orphans
+  sleep 2
+  s1=$(dk inspect -f '{{.State.StartedAt}}' bastion-testbox-web)
+  sleep 3
+  s2=$(dk inspect -f '{{.State.StartedAt}}' bastion-testbox-web)
+  status=$(dk inspect -f '{{.State.Status}}' bastion-testbox-web)
+  if [ "$status" != running ] || [ "$s1" != "$s2" ]; then
+    echo "service web is not stable after deploy (status $status); recent logs:"
+    dk logs --tail 12 bastion-testbox-web 2>&1 | sed 's/^/  /' || true
+    exit 1
+  fi
   printf %s eyJuYW1lIjoid2ViIiwiY29uZmlnRGlnZXN0IjoiYzA4OTEwNzllZGUwNTgxMmQ5ZjkxN2Q3N2IyYWFmMTk4MTkxYjU5OTJjZWI3NWRmNzgwNWRlNmU0MjczNWYzNSIsImltYWdlIjoiZ2hjci5pby9leGFtcGxlL3dlYkBzaGEyNTY6MDAxMTIyMzM0NDU1NjY3Nzg4OTkwMDExMjIzMzQ0NTU2Njc3ODg5OTAwMTEyMjMzNDQ1NTY2Nzc4ODk5MDAxMSJ9 | base64 -d | sudo -n tee /var/lib/bastion/state/testbox/services/.web.tmp >/dev/null && sudo -n mv /var/lib/bastion/state/testbox/services/.web.tmp /var/lib/bastion/state/testbox/services/web.json
 }
 run a17 s17
